@@ -950,6 +950,8 @@ class TagTaTQAReader(object):
 
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
                      answer_type: str, answer:str, derivation: str, facts:list,  answer_mapping: Dict, scale: str, question_id:str):
+
+        
         question_text = question.strip()
         table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
                             table_tokenize(table, self.tokenizer, answer_mapping, answer_type)
@@ -1106,68 +1108,80 @@ class TagTaTQAReader(object):
 
 
     def _read(self, file_path: str):
-        print("Reading file at %s", file_path)
+        print("Reading train dataset file at %s", file_path)
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
-            dataset_file.close()
-        f = open("3round.json",'w')
         instances = []
         key_error_count = 0
         index_error_count = 0
         assert_error_count = 0
-        count=0
+        reading_cnt = 1
+
         for one in tqdm(dataset):
             table = one['table']['table']
             paragraphs = one['paragraphs']
             questions = one['questions']
-
+            #print('')
+            #print("***** Reading *****", reading_cnt)
+            reading_cnt += 1
             for question_answer in questions:
                 try:
-                    question = question_answer["question"].strip()
+                    is_counter = question_answer["counterfactual"] # is counterfactual? 0 or 1
+                    question = question_answer["question"]
                     answer_type = question_answer["answer_type"]
-                    derivation = question_answer["derivation"]
                     answer = question_answer["answer"]
-                    answer_mapping = question_answer["mapping"]
-                    facts = question_answer["facts"]
                     answer_from = question_answer["answer_from"]
                     scale = question_answer["scale"]
-                    #instance = self._to_instance(question, table, paragraphs, answer_from,
-                    #                answer_type, answer, derivation, facts, answer_mapping, scale, question_answer["uid"])
-                    #if instance is not None:
-                    #    instances.append(instance)
+                    if is_counter:
+                        question_if_part = question_answer["question_if_part"]
+                        if answer_type == 'arithmetic': # counterfactual original questions
+                            original_answer_mapping = question_answer["original_answer_mapping"] # use original mapping to find original operands
+                            counter_answer_mapping = question_answer["mapping"] # dummy, not used
+                            facts = question_answer["counter_facts"] if "counter_facts" in question_answer else question_answer["facts"] # for deciding operator
+                            counter_derivation = question_answer["derivation"] # for deciding operator
+                            original_derivation = question_answer["original_derivation"] # not used
+                            if_mapping = question_answer["if_mapping"] if "if_mapping" in question_answer else {}
+                            if_operator = question_answer["if_op"] if "if_op" in question_answer else 'NONE'
+                        else: # original arithmetic questions
+                            original_answer_mapping = question_answer["mapping"] # only using the corresponding mapping and derivation
+                            counter_answer_mapping = question_answer["mapping"]
+                            facts = question_answer["facts"]
+                            counter_derivation = question_answer["derivation"]
+                            original_derivation = question_answer["derivation"]
+                            if_operator = 'NONE'
+                            if_mapping = {}
+                    else:
+                        question_if_part = ""
+                        counter_derivation = question_answer["derivation"]
+                        original_derivation = question_answer["derivation"]
+                        if_mapping = {}
+                        if_operator = 'NONE'
+                        original_answer_mapping = question_answer["mapping"]
+                        counter_answer_mapping = question_answer["mapping"]
+                        facts = question_answer["facts"]
+                    
+                    instance = self._to_instance(question, table, paragraphs, answer_from,
+                                    answer_type, answer, counter_derivation,  facts,
+                                    counter_answer_mapping, scale, question_answer["uid"])
+                    if instance is not None:
+                        instances.append(instance)
                 except RuntimeError as e :
-                    print(f"run time error:{e}" )
-                    # print(question_answer["uid"])
-                except KeyError:
-                    key_error_count += 1
-                    # print(question_answer["uid"])
-                    print("KeyError. Total Error Count: {}".format(key_error_count))
-                except IndexError:
-                    index_error_count += 1
-                    # print(question_answer["uid"])
-                    print("IndexError. Total Error Count: {}".format(index_error_count))
-                except AssertionError:
-                    assert_error_count += 1
-                    # print(question_answer["uid"])
-                    print("AssertError. Total Error Count: {}".format(assert_error_count))
-                instance = self._to_instance(question, table, paragraphs, answer_from,
-                                    answer_type, answer, derivation, facts, answer_mapping, scale, question_answer["uid"])
-                if instance is not None:
-                    #if count == 100:
-                        #exit(0)
-
-                        #print(instance["input_ids"])
-                        #print(instance["token_type_ids"])
-                        #print(instance["tag_labels"])
-                        #print(instance["ari_tags"])
-                    #count += 1
-                    instances.append(instance)
-                    a_ops = instance["ari_ops"]
-                    if 0 not in a_ops and -100 not in a_ops:
-                        f.write(json.dumps({"table":table,"ques":question,"derivation":derivation,"mapping":answer_mapping}) + '\n')
-                #else:
-                #    f.write(json.dumps({"table":table,"ques":question,"derivation":derivation,"mapping":answer_mapping}) + '\n')
-        f.close()
+                    pass
+                    #print(f"run time error:{e}" )
+                    #print(question_answer["uid"])
+                #except KeyError:
+                #    key_error_count += 1
+                #    print(question_answer["uid"])
+                #    print("KeyError. Total Error Count: {}".format(key_error_count))
+                #except IndexError:
+                #    index_error_count += 1
+                #    print(question_answer["uid"])
+                #    print("IndexError. Total Error Count: {}".format(index_error_count))
+                #except AssertionError:
+                #    assert_error_count += 1
+                #    print(question_answer["uid"])
+                #    print("AssertError. Total Error Count: {}".format(assert_error_count))
+        print('total instance numbers', len(instances))
         return instances
 
 class TagTaTQATestReader(object):
