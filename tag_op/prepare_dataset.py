@@ -1,7 +1,7 @@
 import os
 import pickle
 import argparse
-from tag_op.data.tatqa_dataset_3 import TagTaTQAReader, TagTaTQATestReader
+from tag_op.data.tatqa_dataset import TagTaTQAReader, TagTaTQATestReader
 from transformers.models.roberta.tokenization_roberta import RobertaTokenizer
 
 from transformers.models.bert import BertTokenizer
@@ -45,6 +45,9 @@ with open("ari_operator_ids.json",'w',encoding = 'utf-8') as fr:
     json.dump({"<STP>":tokenizer.encode('<STP>')[1],"<SUM>":tokenizer.encode('<SUM>')[1],"<DIFF>":tokenizer.encode('<DIFF>')[1],"<DIVIDE>":tokenizer.encode('<DIVIDE>')[1],"<TIMES>":tokenizer.encode('<TIMES>')[1],"<AVERAGE>":tokenizer.encode('<AVERAGE>')[1]},fr)
     fr.close()
 '''
+with open("ari_operator_ids.json",'w',encoding = 'utf-8') as fr:
+    json.dump({"<OPT>":tokenizer.encode('<OPT>')[1]},fr)
+    fr.close()
 for dm in data_mode:
     dpath = os.path.join(args.input_path, data_format.format(dm))
 
