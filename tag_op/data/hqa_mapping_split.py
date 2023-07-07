@@ -15,7 +15,7 @@ def find_table_mapping(number,table):
                 continue
 
 
-def split_mapping(operands,mapping,table,paras):
+def split_mapping(operands,mapping,question,table,paras):
     temp_mapping = {}
     operand_one_mapping= {}
     operand_two_mapping = {}
@@ -40,6 +40,26 @@ def split_mapping(operands,mapping,table,paras):
                     operand_two_mapping['operator'].append(int(opd))
                 else:
                     operand_two_mapping['operator'] = [int(opd)]
+        if maped == 0:
+            if "question" in mapping:
+                for qm in mapping["question"]:
+                    qnumber = to_number(question[qm[0]:qm[1]])
+                    if abs(abs(opd) - abs(qnumber)) < 0.0001 or abs(abs(opd) - abs(qnumber)*0.01) < 0.0001:
+                            if "question" in temp_mapping:
+                                temp_mapping["question"].append(qm)
+                            else:
+                                temp_mapping["question"] = [qm]
+                            maped = 1
+                            if count == 0:
+                                if "question" in operand_one_mapping:
+                                    operand_one_mapping["question"].append(qm)
+                                else:
+                                    operand_one_mapping["question"]= [qm]
+                            elif count == 1:
+                                if "question" in operand_two_mapping:
+                                    operand_two_mapping["question"].append(qm)
+                                else:
+                                    operand_two_mapping["question"]= [qm]
         if maped == 0:
            if "table" in mapping:
                for mt in mapping["table"]:
