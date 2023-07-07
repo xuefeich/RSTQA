@@ -11,10 +11,9 @@ from tag_op.data.data_util import get_op_1, get_arithmetic_op_index_1, get_op_2,
 from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
 from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.tagop.util import create_logger, set_environment
-from tag_op.data.tatqa_batch_gen_v3 import TaTQABatchGen, TaTQATestBatchGen
+from tag_op.data.tatqa_batch_gen import TaTQABatchGen, TaTQATestBatchGen
 from transformers import RobertaModel, BertModel
-#from tag_op.tagop.modeling_tagop_split import TagopModel
-from tag_op.tagop.modeling_rstqa_v3 import TagopModel
+from tag_op.tagop.modeling_rstqa import TagopModel
 from tag_op.tagop.model import TagopFineTuningModel
 from pathlib import Path
 parser = argparse.ArgumentParser("TagOp training task.")
@@ -97,7 +96,7 @@ def main():
         ari_classes = len(ARITHMETIC_CLASSES_),
         scale_classes = 5,
         num_ops = args.num_ops,
-        #ari_criterion = nn.CrossEntropyLoss(reduction = "sum"),
+        ari_criterion = nn.CrossEntropyLoss(reduction = "sum"),
         ari_operator_criterion = nn.CrossEntropyLoss(),
         operator_criterion = nn.CrossEntropyLoss(),
         scale_criterion = nn.CrossEntropyLoss(),
