@@ -13,8 +13,7 @@ from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.data.data_util import get_op_1, get_op_2, get_arithmetic_op_index_1, get_arithmetic_op_index_2
 from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
 from transformers import RobertaModel, BertModel
-from tag_op.tagop.modeling_tagop_split import TagopModel
-#from tag_op.tagop.modeling_rstqa_v0 import TagopModel
+from tag_op.tagop.modeling_rstqa import TagopModel
 from tag_op.tagop.model import TagopPredictModel
 
 parser = argparse.ArgumentParser("Tagop training task.")
