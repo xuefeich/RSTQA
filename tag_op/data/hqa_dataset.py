@@ -461,6 +461,92 @@ def paragraph_test_tokenize(question, paragraphs, tokenizer, mapping, answer_typ
     return tokens, paragraph_ids, split_tags, word_piece_mask, number_mask, number_value, \
            paragraph_index, mapping_content
 
+def question_tokenize(question, tokenizer, mapping, answer_type):
+    split_tokens = []
+    split_tags = []
+    number_mask = []
+    number_value = []
+    tokens = []
+    tags = []
+    word_piece_mask = []
+    question_index = []
+    mapping_content = []
+
+    question_mapping = False
+    if "question" in list(mapping.keys()) and len(mapping["question"]) != 0:
+        question_mapping = True
+        current_tags = [0 for i in range(len(question))]
+        prev_is_whitespace = True
+        for answer_index in mapping["question"]:
+            mapping_content.append(question[answer_index[0]:answer_index[1]])
+            current_tags[answer_index[0]:answer_index[1]] = \
+                [1 for i in range(len(current_tags[answer_index[0]:answer_index[1]]))]
+        
+        start_index = 0
+        wait_add = False
+        for i, c in enumerate(question):
+            if is_whitespace(c):  # or c in ["-", "–", "~"]:
+                if wait_add:
+                    if 1 in current_tags[start_index:i]:
+                        tags.append(1)
+                    else:
+                        tags.append(0)
+                    wait_add = False
+                prev_is_whitespace = True
+            elif c in ["-", "–", "~"]:
+                if wait_add:
+                    if 1 in current_tags[start_index:i]:
+                        tags.append(1)
+                    else:
+                        tags.append(0)
+                    wait_add = False
+                tokens.append(c)
+                tags.append(0)
+                prev_is_whitespace = True
+            else:
+                if prev_is_whitespace:
+                    tokens.append(c)
+                    wait_add = True
+                    start_index = i
+                else:
+                    tokens[-1] += c
+                prev_is_whitespace = False
+        if wait_add:
+            if 1 in current_tags[start_index:len(text)]:
+                tags.append(1)
+            else:
+                tags.append(0)
+
+    try:
+        assert len(tokens) == len(tags)
+    except AssertionError:
+        print(len(tokens), len(tags))
+        input()
+    current_token_index = 1
+    for i, token in enumerate(tokens):
+        if i != 0:
+            sub_tokens = tokenizer._tokenize(" " + token)
+        else:
+            sub_tokens = tokenizer._tokenize(token)
+
+        number = to_number(token)
+        if number is not None:
+            number_value.append(float(number))
+        else:
+            number_value.append(np.nan)
+        for sub_token in sub_tokens:
+            split_tags.append(tags[i])
+            split_tokens.append(sub_token)
+            question_index.append(current_token_index)
+        current_token_index+=1
+        word_piece_mask += [1]
+        if len(sub_tokens) > 1:
+            word_piece_mask += [0] * (len(sub_tokens) - 1)
+    question_ids = tokenizer.convert_tokens_to_ids(split_tokens)
+    return tokens, question_ids, split_tags, word_piece_mask, number_mask, number_value, question_index
+
+
+
 
 def question_tokenizer(question_text, tokenizer):
     return string_tokenizer(question_text, tokenizer)
