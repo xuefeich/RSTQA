@@ -12,11 +12,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 from .file_utils import is_scatter_available
 from tatqa_utils import  *
-from .data_util import *
-from .data_util import  _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, _is_times
-from .derivation_split import infix_evaluator
+from .hqa_data_util import *
+from .hqa_data_util import  _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, _is_times
+from .hqa_derivation_split import infix_evaluator
 from .hqa_mapping_split import split_mapping
-# soft dependency
 if is_scatter_available():
     from torch_scatter import scatter
 
