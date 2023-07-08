@@ -555,6 +555,8 @@ def question_tokenizer(question_text, tokenizer):
 
 
 def _concat(question_ids,
+            question_tags, 
+            question_index,
             table_ids,
             table_tags,
             table_cell_index,
@@ -572,6 +574,7 @@ def _concat(question_ids,
             ari_tags,):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
+    in_question_index = question_index.copy()
     input_ids = torch.zeros([1, max_pieces])
     input_segments = torch.zeros_like(input_ids)
     paragraph_mask = torch.zeros_like(input_ids)
@@ -579,22 +582,17 @@ def _concat(question_ids,
     table_mask = torch.zeros_like(input_ids)
     question_mask = torch.zeros_like(input_ids)
     table_index = torch.zeros_like(input_ids)
+    question_index = torch.zeros_like(input_ids)
     opt_mask = torch.zeros_like(input_ids)
     opt_index = torch.zeros_like(input_ids)
     tags = torch.zeros_like(input_ids)
-    opd_two_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
     ari_round_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
     ari_round_labels = torch.zeros([1,num_ops,input_ids.shape[1]])
-
-    #opt_labels = torch.zeros([1,num_ops,num_ops])
-    #neg_opt_labels = torch.zeros([1,num_ops])
-    #ari_round_tags = []
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
     question_ids = [sep] + question_ids + [sep]
     question_length = len(question_ids)
-    question_mask[0,1:question_length-1] = 1
     table_length = len(table_ids)
     paragraph_length = len(paragraph_ids)
     if passage_length_limitation is not None:
@@ -619,6 +617,13 @@ def _concat(question_ids,
     input_ids[0, :question_length] = torch.from_numpy(np.array(question_ids))
     input_ids[0, question_length:question_length + len(passage_ids)] = torch.from_numpy(np.array(passage_ids))
     attention_mask = input_ids != 0
+
+    question_mask[0,1:question_length-1] = 1
+    question_index[0, 1:question_length-1] = \
+        torch.from_numpy(np.array(in_question_index[:question_length-2]))
+    tags[0, 1:question_length-1] = torch.from_numpy(np.array(question_tags[:question_length-2]))
+
+    
     table_mask[0, question_length:question_length + table_length] = 1
     table_index[0, question_length:question_length + table_length] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
@@ -633,51 +638,47 @@ def _concat(question_ids,
             torch.from_numpy(np.array(paragraph_tags[:paragraph_length - 1]))
 
     opt_mask[0,question_length + table_length + paragraph_length + 1 : question_length + table_length + paragraph_length + num_ops+1] = 1
-    #opt_index[0,question_length + table_length + paragraph_length + 1:question_length + table_length + paragraph_length + num_ops+1] = torch.from_numpy(np.array([1,2,3,4,5,6]))
     if ari_tags != None:
+      ari_question_tags = ari_tags["question"]
       ari_table_tags = ari_tags["table"]
       ari_para_tags = ari_tags["para"]
-      #ari_opt_tags = ari_tags["operation"]
       for i in range(num_ops):
-         r_num_ops = len(ari_table_tags)
+         r_num_ops = max(len(ari_table_tags),len(ari_para_tags),len(ari_question_tags))
          if i >= r_num_ops:
              break
          if isinstance(ari_table_tags[i],dict):
-
              opd1_tags = np.array(ari_table_tags[i]["operand1"][:table_length])
              opd2_tags = np.array(ari_table_tags[i]["operand2"][:table_length])
-             #ari_round_tags[0,i,question_length:question_length + table_length] = torch.from_numpy(opd1_tags)
-             opd_two_tags[0,i,question_length:question_length + table_length] = torch.from_numpy(opd2_tags)
              for j in np.where(opd2_tags == 1):
                  opd1_tags[j] = 1
              ari_round_labels[0,i,question_length:question_length + table_length] = torch.from_numpy(opd1_tags)
 
 
+             q_opd1_tags = np.array(ari_question_tags[i]["operand1"][:question_length-2])
+             q_opd2_tags = np.array(ari_question_tags[i]["operand2"][:question_length-2])
+             for j in np.where(q_opd2_tags == 1):
+                 q_opd1_tags[j] = 1
+             ari_round_labels[0,i,1:question_length-1] = torch.from_numpy(q_opd1_tags)
+
              if paragraph_length > 1:
                 p_opd1_tags = np.array(ari_para_tags[i]["operand1"][:paragraph_length-1])
                 p_opd2_tags = np.array(ari_para_tags[i]["operand2"][:paragraph_length-1])
-                #ari_round_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
-                opd_two_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd2_tags)
                 for j in np.where(p_opd2_tags == 1):
                     p_opd1_tags[j] = 1
                 ari_round_labels[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
 
          else:
-             #opt_labels[0,i] = torch.from_numpy(np.array(ari_opt_tags[i][:num_ops]))
-             #neg_opt_labels[0,i] = 0
-             ari_round_tags[0,i, question_length:question_length + table_length] = torch.from_numpy(np.array(ari_table_tags[i][:table_length]))
+             ari_round_labels[0,i, 1:question_length-1] = torch.from_numpy(np.array(ari_question_tags[i][:question_length - 2]))
              ari_round_labels[0,i, question_length:question_length + table_length] = torch.from_numpy(np.array(ari_table_tags[i][:table_length]))
              if paragraph_length > 1:
-                ari_round_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(np.array(ari_para_tags[i][:paragraph_length-1]))
                 ari_round_labels[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(np.array(ari_para_tags[i][:paragraph_length-1]))
 
     del in_table_cell_index
     del in_paragraph_index
-
-    #opt_labels = opt_labels[:,:num_ops-1 , 1:]
+    del in_question_index
 
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask,  table_index, tags, \
-            input_segments,opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask
+            input_segments,opt_mask,opt_index,ari_round_labels,question_mask,question_index
 def _test_concat(question_ids,
                 table_ids,
                 table_tags,
@@ -1082,10 +1083,10 @@ class TagTaTQAReader(object):
         #question_ids = question_tokenizer(question_text, self.tokenizer)
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
-        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,ari_round_labels,question_mask,question_index = \
-            _concat(question_ids, table_ids, table_tags, table_cell_index, 
+        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_labels,question_mask,question_index = \
+            _concat(question_ids, question_tags, question_index,
+                    table_ids, table_tags, table_cell_index, 
                     paragraph_ids, paragraph_tags, paragraph_index,
-                    question_ids, question_tags, question_index,
                     self.sep,self.opt,self.question_length_limit,
                     self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags)
 
