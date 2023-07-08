@@ -7,13 +7,13 @@ from tag_op import options
 import torch
 import torch.nn as nn
 from pprint import pprint
-from tag_op.data.data_util import get_op_1, get_arithmetic_op_index_1, get_op_2, get_arithmetic_op_index_2
-from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
-from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
+from tag_op.data.hqa_data_util import get_op_1, get_arithmetic_op_index_1, get_op_2, get_arithmetic_op_index_2
+from tag_op.data.hqa_data_util import get_op_3, get_arithmetic_op_index_3
+from tag_op.data.hqa_data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.tagop.util import create_logger, set_environment
-from tag_op.data.tatqa_batch_gen import TaTQABatchGen, TaTQATestBatchGen
+from tag_op.data.hqa_batch_gen import TaTQABatchGen, TaTQATestBatchGen
 from transformers import RobertaModel, BertModel
-from tag_op.tagop.modeling_rstqa import TagopModel
+from tag_op.tagop.modeling_rstqa_hqa import TagopModel
 from tag_op.tagop.model import TagopFineTuningModel
 from pathlib import Path
 parser = argparse.ArgumentParser("TagOp training task.")
@@ -83,11 +83,11 @@ def main():
     else:
         arithmetic_op_index = get_arithmetic_op_index_3(args.op_mode)
 
-    with open("ari_operator_ids.json",'r',encoding='utf-8') as fr:
-        ari_operator_ids = json.load(fr)
-        fr.close()
+    # with open("ari_operator_ids.json",'r',encoding='utf-8') as fr:
+    #     ari_operator_ids = json.load(fr)
+    #     fr.close()
     print(bert_model.config)
-    bert_model.resize_token_embeddings(bert_model.config.vocab_size+len(ari_operator_ids)+1)
+    bert_model.resize_token_embeddings(bert_model.config.vocab_size+1)
     network = TagopModel(
         encoder = bert_model,
         config = bert_model.config,
@@ -105,12 +105,11 @@ def main():
         arithmetic_op_index = arithmetic_op_index,
         op_mode = args.op_mode,
         ablation_mode = args.ablation_mode,
-        ari_operator_ids = ari_operator_ids,
+        #ari_operator_ids = ari_operator_ids,
     )
     logger.info("Build optimizer etc...")
 
     parameters = filter(lambda p:p.reuires_grad,network.parameters())
-    #network = nn.DataParallel(network,device_ids=[0,1,2,3])
     model = TagopFineTuningModel(args, network, num_train_steps=num_train_steps)
     train_start = datetime.now()
     first = True
