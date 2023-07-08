@@ -818,7 +818,8 @@ class TagTaTQAReader(object):
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
                         tags_ground_truth, operator_ground_truth, scale_ground_truth,paragraph_tokens, 
-                        table_cell_tokens, answer_dict, question_id, ari_ops,opt_mask,opt_index,opt_labels,ari_labels,order_labels,question_mask):
+                        table_cell_tokens, answer_dict, question_id, ari_ops,opt_mask,opt_index,opt_labels,ari_labels,order_labels,
+                       question_mask,question_index,question_number_value,question_tokens):
 
         if ari_ops != None:
             ari_ops_padding = self.num_ops - len(ari_ops)
@@ -865,7 +866,16 @@ class TagTaTQAReader(object):
                 return None
             for sel in selected_indexes:
                 sel = int(sel)
-                if int(table_cell_index[0,sel]) != 0:
+                if int(question_index[0,sel]) != 0:
+                    if int(question_index[0,sel]) == cur or cur_indexes == []:
+                        if cur_indexes == []:
+                            cur = int(question_index[0,sel])
+                        cur_indexes.append(sel)
+                    else:
+                        cur = int(question_index[0,sel])
+                        number_indexes.append(cur_indexes)
+                        cur_indexes = [sel]
+                elif int(table_cell_index[0,sel]) != 0:
                     if int(table_cell_index[0,sel]) == cur or cur_indexes == []:
                         if cur_indexes == []:
                             cur = int(table_cell_index[0,sel])
@@ -892,10 +902,9 @@ class TagTaTQAReader(object):
                     number_indexes[i] += [0] * p
                 else:
                     print("long number")
-                    print(ni)
-                    print(table_cell_index[0,ni])
-                    print(paragraph_index[0,ni])
-                    if int(table_cell_index[0,ni[0]]) != 0 :
+                    if int(question_index[0,ni[0]]) != 0 :
+                        print(question_number_value[int(question_index[0,ni[0]]) - 1])
+                    elif int(table_cell_index[0,ni[0]]) != 0 :
                         print(table_cell_number_value[int(table_cell_index[0,ni[0]]) - 1])
                     elif int(paragraph_index[0,ni[0]]) != 0:
                         print(paragraph_number_value[int(paragraph_index[0,ni[0]]) - 1])
@@ -930,13 +939,16 @@ class TagTaTQAReader(object):
             "question_mask" : np.array(question_mask),
             "paragraph_number_value": np.array(paragraph_number_value),
             "table_cell_number_value": np.array(table_cell_number_value),
+            "question_number_value": np.array(question_number_value),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
+            "question_index": np.array(question_index),
             "tag_labels": np.array(tags_ground_truth),
             "operator_label": int(operator_ground_truth),
             "scale_label": int(scale_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
+            "question_tokens": question_tokens,
             "answer_dict": answer_dict,
             "question_id": question_id,
             "ari_ops" : torch.LongTensor(ari_ops),
@@ -960,7 +972,7 @@ class TagTaTQAReader(object):
 
         question_tokens, question_ids, question_tags, question_word_piece_mask, question_number_mask, \
                 question_number_value, question_index= \
-            question_tokenize(question, self.tokenizer, answer_mapping, answer_type)
+            question_tokenize(question_text, self.tokenizer, answer_mapping, answer_type)
 
         order_labels = np.zeros(self.num_ops)
         if answer_type == "arithmetic":
@@ -1119,7 +1131,7 @@ class TagTaTQAReader(object):
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                     paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, operator_class, scale_class,
                     paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,ari_round_labels,order_labels,
-                    question_mask,question_index,question_number_value)
+                    question_mask,question_index,question_number_value,question_tokens)
 
 
     def _read(self, file_path: str):
