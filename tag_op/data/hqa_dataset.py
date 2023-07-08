@@ -475,47 +475,49 @@ def question_tokenize(question, tokenizer, mapping, answer_type):
     question_mapping = False
     if "question" in list(mapping.keys()) and len(mapping["question"]) != 0:
         question_mapping = True
-        current_tags = [0 for i in range(len(question))]
-        prev_is_whitespace = True
+    current_tags = [0 for i in range(len(question))]
+    prev_is_whitespace = True
+
+    if question_mapping == True：
         for answer_index in mapping["question"]:
             mapping_content.append(question[answer_index[0]:answer_index[1]])
             current_tags[answer_index[0]:answer_index[1]] = \
                 [1 for i in range(len(current_tags[answer_index[0]:answer_index[1]]))]
         
-        start_index = 0
-        wait_add = False
-        for i, c in enumerate(question):
-            if is_whitespace(c):  # or c in ["-", "–", "~"]:
-                if wait_add:
-                    if 1 in current_tags[start_index:i]:
-                        tags.append(1)
-                    else:
-                        tags.append(0)
-                    wait_add = False
-                prev_is_whitespace = True
-            elif c in ["-", "–", "~"]:
-                if wait_add:
-                    if 1 in current_tags[start_index:i]:
-                        tags.append(1)
-                    else:
-                        tags.append(0)
-                    wait_add = False
-                tokens.append(c)
-                tags.append(0)
-                prev_is_whitespace = True
-            else:
-                if prev_is_whitespace:
-                    tokens.append(c)
-                    wait_add = True
-                    start_index = i
+    start_index = 0
+    wait_add = False
+    for i, c in enumerate(question):
+        if is_whitespace(c):  # or c in ["-", "–", "~"]:
+            if wait_add:
+                if 1 in current_tags[start_index:i]:
+                    tags.append(1)
                 else:
-                    tokens[-1] += c
-                prev_is_whitespace = False
-        if wait_add:
-            if 1 in current_tags[start_index:len(text)]:
-                tags.append(1)
+                    tags.append(0)
+                wait_add = False
+            prev_is_whitespace = True
+        elif c in ["-", "–", "~"]:
+            if wait_add:
+                if 1 in current_tags[start_index:i]:
+                    tags.append(1)
+                else:
+                    tags.append(0)
+                wait_add = False
+            tokens.append(c)
+            tags.append(0)
+            prev_is_whitespace = True
+        else:
+            if prev_is_whitespace:
+                tokens.append(c)
+                wait_add = True
+                start_index = i
             else:
-                tags.append(0)
+                tokens[-1] += c
+            prev_is_whitespace = False
+    if wait_add:
+        if 1 in current_tags[start_index:len(text)]:
+            tags.append(1)
+        else:
+            tags.append(0)
 
     try:
         assert len(tokens) == len(tags)
@@ -551,96 +553,6 @@ def question_tokenize(question, tokenizer, mapping, answer_type):
 def question_tokenizer(question_text, tokenizer):
     return string_tokenizer(question_text, tokenizer)
 
-def get_number_order_labels(paragraphs, table, derivation, operator_class, answer_mapping, question_id, OPERATOR_CLASSES):
-    if ("DIVIDE" not in OPERATOR_CLASSES or operator_class != OPERATOR_CLASSES["DIVIDE"]) and \
-            ("CHANGE_RATIO" not in OPERATOR_CLASSES or operator_class != OPERATOR_CLASSES["CHANGE_RATIO"]) and \
-            ("DIFF" not in OPERATOR_CLASSES or operator_class != OPERATOR_CLASSES["DIFF"]):
-        return -1
-    paragraphs_copy = paragraphs.copy()
-    paragraphs = {}
-    for paragraph in paragraphs_copy:
-        paragraphs[paragraph["order"]] = paragraph["text"]
-    del paragraphs_copy
-    operands = get_operands(derivation)
-    first_operand, second_operand = operands[0], operands[1]
-    answer_from = answer_mapping.keys()
-    table_answer_coordinates = None
-    paragraph_answer_coordinates = None
-    if "table" in answer_from:
-        table_answer_coordinates = answer_mapping["table"]
-    if "paragraph" in answer_from:
-        paragraph_answer_coordinates = answer_mapping["paragraph"]
-    table_answer_nums, paragraph_answer_nums = get_answer_nums(table_answer_coordinates, paragraph_answer_coordinates)
-    if (table_answer_nums + paragraph_answer_nums) < 2:
-        # print("the same number to skip it: derivation")
-        raise RuntimeError(f" skip this the derivation is {derivation} ")
-    if table_answer_nums == 2:
-        answer_coordinates = answer_mapping["table"]
-        answer_coordinates_copy = answer_coordinates.copy()
-        answer_coordinates = [(answer_coordinate[0], answer_coordinate[1]) for answer_coordinate in
-                              answer_coordinates_copy]
-        del answer_coordinates_copy
-        operand_one = to_number(table.iloc[answer_coordinates[0][0], answer_coordinates[0][1]])
-        operand_two = to_number(table.iloc[answer_coordinates[1][0], answer_coordinates[1][1]])
-        if str(operand_one) == str(first_operand):
-            if answer_coordinates[0][0] < answer_coordinates[1][0]:
-                return 0
-            elif answer_coordinates[0][0] == answer_coordinates[1][0] and \
-                    answer_coordinates[0][1] < answer_coordinates[1][1]:
-                return 0
-            else:
-                return 1
-        else:
-            if answer_coordinates[0][0] > answer_coordinates[1][0]:
-                return 1
-            elif answer_coordinates[0][0] == answer_coordinates[1][0] and \
-                    answer_coordinates[0][1] > answer_coordinates[1][1]:
-                return 1
-            else:
-                return 0
-    elif paragraph_answer_nums == 2:
-        paragraph_mapping_orders = list(answer_mapping["paragraph"].keys())
-        if len(paragraph_mapping_orders) == 1:
-            answer_one_order, answer_two_order = (paragraph_mapping_orders[0], paragraph_mapping_orders[0])
-            answer_one_start = answer_mapping["paragraph"][answer_one_order][0][0]
-            answer_one_end = answer_mapping["paragraph"][answer_one_order][0][1]
-            answer_two_start = answer_mapping["paragraph"][answer_two_order][1][0]
-            answer_two_end = answer_mapping["paragraph"][answer_two_order][1][1]
-        else:
-            answer_one_order = paragraph_mapping_orders[0]
-            answer_two_order = paragraph_mapping_orders[1]
-            answer_one_start = answer_mapping["paragraph"][answer_one_order][0][0]
-            answer_one_end = answer_mapping["paragraph"][answer_one_order][0][1]
-            answer_two_start = answer_mapping["paragraph"][answer_two_order][0][0]
-            answer_two_end = answer_mapping["paragraph"][answer_two_order][0][1]
-        operand_one = to_number(paragraphs[int(answer_one_order)][answer_one_start:answer_one_end])
-        operand_two = to_number(paragraphs[int(answer_two_order)][answer_two_start:answer_two_end])
-        if operand_one == first_operand:
-            if answer_one_order < answer_two_order:
-                return 0
-            elif answer_one_order == answer_two_order and answer_one_start < answer_two_start:
-                return 0
-            else:
-                return 1
-        else:
-            if answer_one_order > answer_two_order:
-                return 1
-            elif answer_one_order == answer_two_order and answer_one_start > answer_two_start:
-                return 1
-            else:
-                return 0
-    else:
-        answer_coordinates = answer_mapping["table"]
-        operand_one = to_number(table.iloc[answer_coordinates[0][0], answer_coordinates[0][1]])
-        paragraph_mapping_orders = list(answer_mapping["paragraph"].keys())
-        answer_two_order = paragraph_mapping_orders[0]
-        answer_two_start = answer_mapping["paragraph"][answer_two_order][0][0]
-        answer_two_end = answer_mapping["paragraph"][answer_two_order][0][1]
-        operand_two = to_number(paragraphs[int(answer_two_order)][answer_two_start:answer_two_end])
-        if operand_one == first_operand:
-            return 0
-        else:
-            return 1
 
 def _concat(question_ids,
             table_ids,
