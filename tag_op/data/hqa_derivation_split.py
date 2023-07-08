@@ -232,15 +232,23 @@ def op_squence(ops,avg):
                     for k in range(0, i):
                         if ops[k] == ops[i][j]:
                             op_squ[i][j] = str(k)
-    for op in op_squ:
-        if op[0] == '+':
-            op[0] = 'SUM'
-        elif op[0] == '-':
-            op[0] = 'DIFF'
-        elif op[0] == '*':
-            op[0] = 'TIMES'
-        elif op[0] == '/':
-            op[0] = 'DIVIDE'
+    lops = len(op_squ)
+    for i in range(lops):
+        if op_squ[i][0] == '+':
+            if len(op_squ) == 2 and (op_squ[i][1] == 1 or op_squ[i][2]) == 1:
+                inc_number = op_squ[i][1] if op_squ[i][1] != 1 else op_squ[i][2]
+                op_squ[i] = ["INC", inc_number]
+            else:
+                op_squ[i][0] = 'SUM'
+        elif op_squ[i][0] == '-':
+            if op_squ[i][1] == 1 and op_squ[i][2] < 1:
+                op_squ[i] = ["DEC", op_squ[i][2]]
+            else:
+                op_squ[i][0] = 'DIFF'
+        elif op_squ[i][0] == '*':
+            op_squ[i][0] = 'TIMES'
+        elif op_squ[i][0] == '/':
+            op_squ[i][0] = 'DIVIDE'
 
     if avg == False:
         op_squ_out = deepcopy(op_squ)
