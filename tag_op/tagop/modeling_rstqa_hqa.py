@@ -1,13 +1,13 @@
 import torch
 torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
-from tatqa_metric import TaTQAEmAndF1
+from hqa_metric import TaTQAEmAndF1
 from .tools.util import FFNLayer
 from .tools import allennlp as util
 from typing import Dict, List, Tuple
 import numpy as np
 from tag_op.data.file_utils import is_scatter_available
-from tag_op.data.data_util import get_op_1, get_op_2, get_op_3, SCALE, OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
+from tag_op.data.hqa_data_util import get_op_1, get_op_2, get_op_3, SCALE, OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 
 np.set_printoptions(threshold=np.inf)
 # soft dependency
