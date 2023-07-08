@@ -212,9 +212,9 @@ class TaTQAEmAndF1(object):
         self._order_em = 0.0
         self._ordern = 0
         self.op_correct_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0,  "Stop":0}
+                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0,  "Stop":0}
         self.op_total_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0,  "Stop":0}
+                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0,  "Stop":0}
         self.scale_correct_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
         self.scale_total_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
         self._count = 0
@@ -358,7 +358,7 @@ class TaTQAEmAndF1(object):
         op_score = self._op_em / self._opn if self._opn > 0 else 0
         order_score = self._order_em / self._ordern if self._ordern >0 else 0
         op_em_detail = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                               "Multiplication": 0, "Division": 0, "Difference": 0, "Stop": 0}
+                               "Multiplication": 0, "Division": 0, "Difference": 0,"ratio increasing": 0, "ratio decreasing": 0,  "Stop": 0}
         scale_em_detail = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
         for k in op_em_detail.keys():
             op_em_detail[k] = self.op_correct_count[k] / self.op_total_count[k] if self.op_total_count[k] > 0 else 0
@@ -401,9 +401,9 @@ class TaTQAEmAndF1(object):
         self._ordern = 0
         self._details = []
         self.op_correct_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0,"Difference": 0,"Stop":0}
+                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0, "Stop":0}
         self.op_total_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0, "Difference": 0,"Difference": 0,"Stop":0}
+                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0, "Stop":0}
         self.scale_correct_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
         self.scale_total_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
 
