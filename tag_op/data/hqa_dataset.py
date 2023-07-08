@@ -586,7 +586,7 @@ def _concat(question_ids,
     opt_mask = torch.zeros_like(input_ids)
     opt_index = torch.zeros_like(input_ids)
     tags = torch.zeros_like(input_ids)
-    ari_round_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
+    #ari_round_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
     ari_round_labels = torch.zeros([1,num_ops,input_ids.shape[1]])
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
@@ -680,6 +680,8 @@ def _concat(question_ids,
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask,  table_index, tags, \
             input_segments,opt_mask,opt_index,ari_round_labels,question_mask,question_index
 def _test_concat(question_ids,
+                 question_tags,
+                 question_index,
                 table_ids,
                 table_tags,
                 table_cell_index,
@@ -696,12 +698,14 @@ def _test_concat(question_ids,
                 num_ops):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
+    in_question_index = question_index.copy()
     input_ids = torch.zeros([1, max_pieces])
     input_segments = torch.zeros_like(input_ids)
     paragraph_mask = torch.zeros_like(input_ids)
     paragraph_index = torch.zeros_like(input_ids)
     table_mask = torch.zeros_like(input_ids)
     table_index = torch.zeros_like(input_ids)
+    question_index = torch.zeros_like(input_ids)
     tags = torch.zeros_like(input_ids)
     question_mask = torch.zeros_like(input_ids) 
     opt_mask = torch.zeros_like(input_ids)
@@ -712,8 +716,6 @@ def _test_concat(question_ids,
             question_ids = question_ids[:question_length_limitation]
     question_ids = [sep] + question_ids + [sep]
     question_length = len(question_ids)
-    question_mask[0,1:question_length-1] = 1
-
     table_length = len(table_ids)
     paragraph_length = len(paragraph_ids)
     if passage_length_limitation is not None:
@@ -738,6 +740,12 @@ def _test_concat(question_ids,
     input_ids[0, :question_length] = torch.from_numpy(np.array(question_ids))
     input_ids[0, question_length:question_length + len(passage_ids)] = torch.from_numpy(np.array(passage_ids))
     attention_mask = input_ids != 0
+
+    question_mask[0,1:question_length-1] = 1
+    question_index[0, 1:question_length-1] = \
+        torch.from_numpy(np.array(in_question_index[:question_length-2]))
+    tags[0,  1:question_length-1] = torch.from_numpy(np.array(question_tags[:question_length-2]))
+
     table_mask[0, question_length:question_length + table_length] = 1
     table_index[0, question_length:question_length + table_length] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
@@ -755,8 +763,10 @@ def _test_concat(question_ids,
 
     del in_table_cell_index
     del in_paragraph_index
+    del in_question_index
+
     return input_ids, attention_mask, paragraph_mask, paragraph_index, \
-           table_mask,  table_index, tags, input_segments,opt_mask,opt_index,question_mask
+           table_mask,  table_index, tags, input_segments,opt_mask,opt_index,question_mask,question_index
 
 
 
@@ -1234,14 +1244,11 @@ class TagTaTQATestReader(object):
 
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                         paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
-                        tags_ground_truth, paragraph_tokens, table_cell_tokens, answer_dict, question_id,opt_mask,opt_index,derivation,question_mask):
+                        tags_ground_truth, paragraph_tokens, table_cell_tokens, answer_dict, question_id,opt_mask,opt_index,derivation,
+                       question_mask,question_index,question_number_value,question_tokens):
 
 
         opt_id = torch.nonzero(opt_mask == 1)[0,1]
-        #opt_indexes = torch.zeros([1,self.num_ops,1024])
-        #for i in range(self.num_ops):
-        #    j = opt_id + i
-        #    opt_indexes[0,i,:] = j
         return {
             "input_ids": np.array(input_ids),
             "attention_mask": np.array(attention_mask),
@@ -1250,23 +1257,23 @@ class TagTaTQATestReader(object):
             "table_mask": np.array(table_mask),
             "paragraph_number_value": np.array(paragraph_number_value),
             "table_cell_number_value": np.array(table_cell_number_value),
+            "question_number_value": np.array(question_number_value),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
+            "question_index": np.array(question_index),
             "tag_labels": np.array(tags_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
+            "question_tokens": question_tokens,
             "answer_dict": answer_dict,
             "question_id": question_id,
-            #"opt_index" : opt_indexes,
-            #"ari_ops" : torch.LongTensor(ari_ops),
             "opt_mask":opt_id,
             "derivation":derivation,
             "question_mask":np.array(question_mask),
-            #"truth_numbers":truth_numbers
-            #"opt_index":torch.LongTensor(np.array(opt_index))
+            
         }
 
-    def summerize_op(self, derivation, answer_type, facts, answer, answer_mapping, scale,tv,pv):
+    def summerize_op(self, derivation, answer_type, facts, answer, answer_mapping, scale,tv,pv,qv):
         truth_numbers = []
         order_labels = [-100]*self.num_ops
         if answer_type == "span":
@@ -1321,12 +1328,18 @@ class TagTaTQATestReader(object):
                                 operator_classes[i] = "Difference"
                                 opd1 = -100
                                 opd2 = -100
+                                ql = len(qv)
                                 tl = len(tv)
                                 pl = len(pv)
-                                for o in range(tl+pl):
+                                for o in range(ql+tl+pl):
                                     if isinstance(ari[1],str) or isinstance(ari[2],str):
                                         break
-                                    if o < tl:
+                                    if o < ql:
+                                        if qv[o] == ari[1]:
+                                            opd1 = o
+                                        if qv[o] == ari[2]:
+                                            opd2 = o
+                                    elif o < tl:
                                         if tv[o] == ari[1]:
                                             opd1 = o
                                         if tv[o] == ari[2]:
@@ -1355,7 +1368,12 @@ class TagTaTQATestReader(object):
                                 for o in range(tl+pl):
                                     if isinstance(ari[1],str) or isinstance(ari[2],str):
                                         break
-                                    if o < tl:
+                                    if o < ql:
+                                        if qv[o] == ari[1]:
+                                            opd1 = o
+                                        if qv[o] == ari[2]:
+                                            opd2 = o
+                                    elif o < tl:
                                         if tv[o] == ari[1]:
                                             opd1 = o
                                         if tv[o] == ari[2]:
@@ -1401,16 +1419,22 @@ class TagTaTQATestReader(object):
         paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
                 paragraph_number_value, paragraph_index, paragraph_mapping_content = \
             paragraph_test_tokenize(question, paragraphs, self.tokenizer, answer_mapping, answer_type)
+        
+        question_tokens, question_ids, question_tags, question_word_piece_mask, question_number_mask, \
+                question_number_value, question_index= \
+            question_tokenize(question_text, self.tokenizer, answer_mapping, answer_type)
 
         if self.mode == "dev":
-            gold_ops,truth_numbers,order_labels = self.summerize_op(derivation, answer_type, facts, answer, answer_mapping, scale,table_cell_number_value,paragraph_number_value)
+            gold_ops,truth_numbers,order_labels = self.summerize_op(derivation, answer_type, facts, answer, answer_mapping, scale,
+                                                                    table_cell_number_value,paragraph_number_value,question_number_value)
             if gold_ops is None:
                 gold_ops = ["ignore"] *self.num_ops
-        question_ids = question_tokenizer(question_text, self.tokenizer)
+        #question_ids = question_tokenizer(question_text, self.tokenizer)
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
-        table_mask, table_index, tags, token_type_ids ,opt_mask,opt_index , question_mask= \
-            _test_concat(question_ids, table_ids, table_tags, table_cell_index,
+        table_mask, table_index, tags, token_type_ids ,opt_mask,opt_index , question_mask,question_index= \
+            _test_concat(question_ids, question_tags , question_index
+                    table_ids, table_tags, table_cell_index,
                     paragraph_ids, paragraph_tags, paragraph_index,
                     self.sep,self.opt, self.question_length_limit,
                     self.passage_length_limit, self.max_pieces,self.num_ops)
@@ -1418,6 +1442,7 @@ class TagTaTQATestReader(object):
         if self.mode == "test":
             gold_ops= None
             scale = None
+            order_labels = None
         else:
             self.scale_count[scale] += 1
         answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from,
@@ -1425,7 +1450,7 @@ class TagTaTQATestReader(object):
 
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
             paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, paragraph_tokens,
-            table_cell_tokens, answer_dict, question_id,opt_mask,opt_index,derivation,question_mask)
+            table_cell_tokens, answer_dict, question_id,opt_mask,opt_index,derivation,question_mask,question_index,question_number_value,question_tokens)
 
 
     def _read(self, file_path: str):
@@ -1461,41 +1486,14 @@ class TagTaTQATestReader(object):
                     scale = None
                     derivation = None
                     facts = None
-                instance = self._to_test_instance(question, table, paragraphs, answer_from,answer_type, answer, answer_mapping, scale, question_answer["uid"], derivation, facts)
+                instance = self._to_test_instance(question, table, paragraphs, answer_from,answer_type, answer,
+                                                  answer_mapping, scale, question_answer["uid"], derivation, facts)
                 #if instance is not None and "ignore" not in instance["answer_dict"]["gold_ops"][:3] and "Stop" not in instance["answer_dict"]["gold_ops"][:3]:
                 if instance is not None:
                     instances.append(instance)
                     #if "Stop" not in instance["answer_dict"]["gold_ops"] and "ignore" not in instance["answer_dict"]["gold_ops"]:
                     if instance["answer_dict"]["gold_ops"][3] == "Stop":
                        maxround_instances.append(instance)
-            '''
-            for question_answer in questions:
-                try:
-                    question = question_answer["question"].strip()
-                    answer_type = question_answer["answer_type"]
-                    answer = question_answer["answer"]
-                    answer_from = question_answer["answer_from"]
-                    answer_mapping = question_answer["mapping"]
-                    scale = question_answer["scale"]
-                    derivation = question_answer['derivation']
-                    facts = question_answer['facts']
-                    instance = self._to_test_instance(question, table, paragraphs, answer_from,
-                                    answer_type, answer, answer_mapping, scale, question_answer["uid"], derivation, facts)
-                    if instance is not None:
-                        instances.append(instance)
-                except RuntimeError:
-                    print(question_answer["uid"])
-                except IndexError:
-                    index_error_count += 1
-                    print(question_answer["uid"])
-                    print("IndexError. Total Error Count: {}".format(index_error_count))
-                except AssertionError:
-                    assert_error_count += 1
-                    print(question_answer["uid"])
-                    print("AssertError. Total Error Count: {}".format(assert_error_count))
-                except KeyError:
-                    continue
-            '''
         print(self.op_count)
         print(self.scale_count)
         self.op_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0,"Arithmetic":0,"Count":0}
