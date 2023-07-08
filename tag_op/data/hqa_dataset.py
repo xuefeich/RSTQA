@@ -1392,6 +1392,10 @@ class TagTaTQATestReader(object):
                                         order_labels[i] = 1
                             if ari[0] == "AVERAGE":
                                 operator_classes[i] = "Average"
+                            if ari[0] == "INC":
+                                 operator_classes[i] = "ratio increasing"
+                            if ari[0] == "DEC":
+                                 operator_classes[i] = "ratio decreasing"
                             j = i
                         #print(j)
                         if j < self.num_ops - 1:
