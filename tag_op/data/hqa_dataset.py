@@ -15,7 +15,7 @@ from tatqa_utils import  *
 from .data_util import *
 from .data_util import  _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, _is_times
 from .derivation_split import infix_evaluator
-from .mapping_split import split_mapping
+from .hqa_mapping_split import split_mapping
 # soft dependency
 if is_scatter_available():
     from torch_scatter import scatter
