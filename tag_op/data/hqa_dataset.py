@@ -957,6 +957,9 @@ class TagTaTQAReader(object):
                 paragraph_number_value, paragraph_index= \
             paragraph_tokenize(question, paragraphs, self.tokenizer, answer_mapping, answer_type)
 
+        question_tokens, question_ids, question_tags, question_word_piece_mask, question_number_mask, \
+                question_number_value, question_index= \
+            question_tokenize(question, self.tokenizer, answer_mapping, answer_type)
 
         order_labels = np.zeros(self.num_ops)
         if answer_type == "arithmetic":
@@ -966,7 +969,7 @@ class TagTaTQAReader(object):
             try:
                if _is_average(num_facts,answer):
                    ari_ops = [self.ari_ops['AVERAGE']]
-                   ari_tags = {'table':[table_tags],'para':[paragraph_tags],'operation':[[0]*self.num_ops]}
+                   ari_tags = {'table':[table_tags],'para':[paragraph_tags], 'question' : question_tags,'operation':[[0]*self.num_ops]}
                    isavg = 1
             except:
                 isavg = 0
@@ -993,7 +996,14 @@ class TagTaTQAReader(object):
                            break
                        else:
                            if ari_operations[i][0] in ['DIFF','DIVIDE']:
-                              if "table" in operand_one_mapping and "table" in operand_two_mapping:
+                              if "question" in  operand_one_mapping and "question" in operand_two_mapping:
+                                  if operand_one_mapping["question"][0][0] > operand_two_mapping["question"][0][0]:
+                                      order_labels[i] = 1
+                                  elif operand_one_mapping["question"][0][1] > operand_two_mapping["question"][0][1]:
+                                      order_labels[i] = 1
+                              elif ("table" in operand_one_mapping or "paragraph" in operand_one_mapping) and "question" in operand_two_mapping:
+                                    order_labels[i] = 1
+                              elif "table" in operand_one_mapping and "table" in operand_two_mapping:
                                   if operand_one_mapping["table"][0][0] > operand_two_mapping["table"][0][0]:
                                       order_labels[i] = 1
                                   elif operand_one_mapping["table"][0][1] > operand_two_mapping["table"][0][1]:
@@ -1009,12 +1019,14 @@ class TagTaTQAReader(object):
                                       order_labels[i] = 1
 
                               _,_,op1_table_tags,_,_ = table_tokenize(table,self.tokenizer,operand_one_mapping,answer_type)
-
+                              _,_,op1_question_tags,_,_,_,_ = question_tokenize(question,self.tokenizer,operand_one_mapping,answer_type)
                               _,_,op1_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_one_mapping, answer_type)
                               _,_,op2_table_tags,_,_ = table_tokenize(table,self.tokenizer,operand_two_mapping,answer_type)
                               _,_,op2_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_two_mapping, answer_type)
+                              _,_,op2_question_tags,_,_,_,_ = question_tokenize(question,self.tokenizer,operand_two_mapping,answer_type)
                               ari_tags['table'].append({"operand1":op1_table_tags,"operand2":op2_table_tags})
                               ari_tags['para'].append({"operand1":op1_para_tags,"operand2":op2_para_tags})
+                              ari_tags['question'].append({"operand1":op1_question_tags,"operand2":op2_question_tags})
                               op1_tags = [0] * self.num_ops
                               op2_tags = [0] * self.num_ops
                               if 'operator' in operand_one_mapping:
@@ -1028,8 +1040,10 @@ class TagTaTQAReader(object):
                            else:
                               _,_,temp_table_tags,_,_ = table_tokenize(table,self.tokenizer,temp_mapping,answer_type)
                               _,_,temp_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, temp_mapping, answer_type)
+                               _,_,temp_question_tags,_,_,_,_ = question_tokenize(question, self.tokenizer, temp_mapping, answer_type)
                               ari_tags['table'].append(temp_table_tags)
                               ari_tags['para'].append(temp_para_tags)
+                              ari_tags['question'].append(temp_question_tags)
                               temp_op_tags = [0] * self.num_ops
                               if 'operator' in temp_mapping:
                                   for i in temp_mapping['operator']:
@@ -1065,12 +1079,13 @@ class TagTaTQAReader(object):
             column_relation[column_name] = str(column_name)
         table.rename(columns=column_relation, inplace=True)
 
-        question_ids = question_tokenizer(question_text, self.tokenizer)
+        #question_ids = question_tokenizer(question_text, self.tokenizer)
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
-        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask = \
+        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,ari_round_labels,question_mask,question_index = \
             _concat(question_ids, table_ids, table_tags, table_cell_index, 
                     paragraph_ids, paragraph_tags, paragraph_index,
+                    question_ids, question_tags, question_index,
                     self.sep,self.opt,self.question_length_limit,
                     self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags)
 
@@ -1102,7 +1117,8 @@ class TagTaTQAReader(object):
         answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                     paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, operator_class, scale_class,
-                    paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,ari_round_labels,order_labels,question_mask)
+                    paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,ari_round_labels,order_labels,
+                    question_mask,question_index,question_number_value)
 
 
     def _read(self, file_path: str):
