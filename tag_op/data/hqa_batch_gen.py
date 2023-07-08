@@ -5,7 +5,7 @@ import random
 import numpy as np
 class TaTQABatchGen(object):
     def __init__(self, args, data_mode,num_ops ,encoder='roberta'):
-        dpath =  f"tagop_{encoder}_cached_{data_mode}.pkl"
+        dpath =  f"hqa_{encoder}_cached_{data_mode}.pkl"
         self.is_train = data_mode == "train"
         self.args = args
         self.num_ops = num_ops
@@ -172,7 +172,7 @@ class TaTQABatchGen(object):
 
 class TaTQATestBatchGen(object):
     def __init__(self, args, data_mode,num_ops, encoder='roberta'):
-        dpath =  f"tagop_{encoder}_cached_{data_mode}.pkl"
+        dpath =  f"hqa_{encoder}_cached_{data_mode}.pkl"
         self.is_train = data_mode == "train"
         self.args = args
         self.num_ops = num_ops
