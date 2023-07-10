@@ -38,7 +38,7 @@ else:
     data_reader = TagTaTQAReader(tokenizer, args.passage_length_limit, args.question_length_limit, sep=sep,num_ari_ops = args.num_arithmetic_operators)
     data_mode = ["train"]
 
-data_format = "tatqa_dataset_{}.json"
+data_format = "hqa_{}.json"
 print(f'==== NOTE ====: encoder:{args.encoder}, mode:{args.mode}')
 '''
 with open("ari_operator_ids.json",'w',encoding = 'utf-8') as fr:
