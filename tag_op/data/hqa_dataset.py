@@ -477,7 +477,7 @@ def question_tokenize(question, tokenizer, mapping, answer_type):
     current_tags = [0 for i in range(len(question))]
     prev_is_whitespace = True
 
-    if question_mapping == True：
+    if question_mapping == True:
         for answer_index in mapping["question"]:
             mapping_content.append(question[answer_index[0]:answer_index[1]])
             current_tags[answer_index[0]:answer_index[1]] = \
@@ -1062,7 +1062,7 @@ class TagTaTQAReader(object):
                            else:
                               _,_,temp_table_tags,_,_ = table_tokenize(table,self.tokenizer,temp_mapping,answer_type)
                               _,_,temp_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, temp_mapping, answer_type)
-                               _,_,temp_question_tags,_,_,_,_ = question_tokenize(question, self.tokenizer, temp_mapping, answer_type)
+                              _,_,temp_question_tags,_,_,_,_ = question_tokenize(question, self.tokenizer, temp_mapping, answer_type)
                               ari_tags['table'].append(temp_table_tags)
                               ari_tags['para'].append(temp_para_tags)
                               ari_tags['question'].append(temp_question_tags)
