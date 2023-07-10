@@ -381,6 +381,8 @@ class TagopModel(nn.Module):
                 paragraph_tokens,
                 paragraph_numbers,
                 table_cell_numbers,
+                question_index,
+                question_numbers,
                 question_ids,
                 opt_mask,
                 position_ids=None,
@@ -393,7 +395,6 @@ class TagopModel(nn.Module):
                 table_mapping_content=None,
                 paragraph_mapping_content=None,
                 derivation = None,
-                #truth_numbers = None
                 ):
         batch_size = input_ids.shape[0]
         device = input_ids.device
@@ -406,47 +407,46 @@ class TagopModel(nn.Module):
         sequence_output = outputs[0]
 
         cls_output = sequence_output[:, 0, :]
-        cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
-        question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
-        question_reduce_mean = torch.mean(question_output, dim=1)
-
-        #operator_prediction = self.operator_predictor(cls_output)
-        #predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
-
-        #opt_output = sequence_output.gather(index = opt_index,dim = 1)
         opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
-
         for bsz in range(batch_size):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
-
         ari_ops_prediction = self.ari_predictor(opt_output)
         pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
 
 
+        question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
+        question_tag_prediction = self.tag_predictor(question_output))
+        question_tag_prediction = util.masked_log_softmax(question_tag_prediction, mask=None)
+        question_tag_prediction = util.replace_masked_values(question_tag_prediction, table_mask.unsqueeze(-1), 0)
+        question_tag_labels = util.replace_masked_values(tag_labels.float(), question_mask, 0)
+        
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
-        table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
-        table_tag_prediction = self.tag_predictor(torch.cat((table_sequence_output,table_cls_output),dim = -1))
+        table_tag_prediction = self.tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
 
         paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_tag_prediction = self.tag_predictor(torch.cat((paragraph_sequence_output,paragraph_cls_output),dim = -1))
+        paragraph_tag_prediction = self.tag_predictor(paragraph_sequence_output)
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
-
+        
+        question_reduce_mean = torch.mean(question_output, dim=1)
         paragraph_reduce_mean = torch.mean(paragraph_sequence_output, dim=1)
         table_reduce_mean = torch.mean(table_sequence_output, dim=1)
 
-        scale_output = torch.cat((question_reduce_mean, table_reduce_mean, paragraph_reduce_mean), dim=-1)
-        operator_prediction = self.operator_predictor(scale_output)
+        op_output = torch.cat((question_reduce_mean, table_reduce_mean, paragraph_reduce_mean), dim=-1)
+        operator_prediction = self.operator_predictor(op_output)
 
         scale_prediction = self.scale_predictor(cls_output)
         predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
 
-        #with torch.no_grad():
+
+        question_tag_prediction_score = question_tag_prediction[:, :, 1]
+        question_token_tag_prediction_score = reduce_max_index(question_tag_prediction_score, question_index).detach().cpu().numpy()
+        question_tag_prediction_argmax = torch.argmax(question_tag_prediction, dim=-1).float()
+        question_token_tag_prediction = reduce_mean_index(question_tag_prediction_argmax, question_index).detach().cpu().numpy()
         paragraph_tag_prediction_score = paragraph_tag_prediction[:, :, 1]
         paragraph_token_tag_prediction_score = reduce_max_index(paragraph_tag_prediction_score, paragraph_index).detach().cpu().numpy()
         paragraph_tag_prediction_argmax = torch.argmax(paragraph_tag_prediction, dim=-1).float()
@@ -456,24 +456,10 @@ class TagopModel(nn.Module):
         table_tag_prediction_argmax = torch.argmax(table_tag_prediction, dim=-1).float()
         table_cell_tag_prediction = reduce_mean_index(table_tag_prediction_argmax, table_cell_index).detach().cpu().numpy()
 
-        #modify the input_ids
-        '''
-        input_ids = replace_opt(input_ids,opt_mask,self.ari_operator_ids,pred_ari_class,batch_size,self.num_ops)
-        outputs = self.encoder(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids)
-        sequence_output = outputs[0]
-        opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
-        '''
-        #opt_output = sequence_output.gather(index = opt_index,dim = 1)
         selected_numbers_output = torch.zeros([200 , self.num_ops, 2*self.hidden_size],device = device)
         number_indexes_batch = np.zeros([200 , 2])
 
         selected_numbers_batch = []
-        #sel_index_batch_list = []
-        #selected_numbers_batch = np.zeros([200])
 
         num_numbers = 0
 
@@ -503,23 +489,24 @@ class TagopModel(nn.Module):
         pred_order = torch.zeros([batch_size,self.num_ops],device = device)
 
         for bsz in range(batch_size):
-            #opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
+            question_sel_indexes , question_selected_numbers = get_number_index_from_reduce_sequence(question_token_tag_prediction[bsz],question_numbers[bsz])
             para_sel_indexes , paragraph_selected_numbers = get_number_index_from_reduce_sequence(paragraph_token_tag_prediction[bsz],paragraph_numbers[bsz])
             table_sel_indexes , table_selected_numbers = get_number_index_from_reduce_sequence(table_cell_tag_prediction[bsz], table_cell_numbers[bsz])
-            selected_numbers = paragraph_selected_numbers + table_selected_numbers
-            selected_indexes = para_sel_indexes + table_sel_indexes
+            selected_numbers = question_selected_numbers + paragraph_selected_numbers + table_selected_numbers
+            selected_indexes = question_sel_indexes + para_sel_indexes + table_sel_indexes
 
             if not selected_numbers:
                 selected_numbers_batch.append([])
-                #continue
             else:
+                qn = len(question_sel_indexes)
                 pn = len(para_sel_indexes)
                 tn = len(table_sel_indexes)
                 k = 0
                 selected_numbers_batch.append(selected_numbers)
-                #sel_index_batch_list.append(selected_indexes)
                 for sel_index in selected_indexes:
-                    if k < pn:
+                    if k < qn:
+                        selected_index = torch.nonzero(question_index[bsz] == sel_index).squeeze(-1)
+                    elif k < pn:
                         selected_index = torch.nonzero(paragraph_index[bsz] == sel_index).squeeze(-1)
                     else:
                         selected_index = torch.nonzero(table_cell_index[bsz] == sel_index).squeeze(-1)
@@ -531,10 +518,8 @@ class TagopModel(nn.Module):
                     number_indexes_batch[num_numbers,0] = bsz
                     number_indexes_batch[num_numbers,1] = selected_index_mean
                     for roud in range(self.num_ops):
-                        #selected_numbers_output[num_numbers,roud] = torch.cat((sequence_output[bsz , selected_index , :], opt_output[bsz,roud,:]),dim = -1)
                         operand_prediction[num_numbers,roud] = self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , selected_index],dim = 0).squeeze(0), opt_output[bsz,roud]),dim = -1))
                         cur_score = operand_prediction[num_numbers,roud,1]
-
                         if cur_score > top_scores[bsz,roud]:
                             top_scores[bsz,roud] = cur_score
                             top_indexes[bsz,roud] = selected_index_mean
@@ -566,14 +551,7 @@ class TagopModel(nn.Module):
 
 
         if num_numbers > 0:
-            #selected_numbers_output = selected_numbers_output[:num_numbers]
             number_indexes_batch = number_indexes_batch[:num_numbers]
-            #selected_numbers_batch = selected_numbers_batch[:num_numbers]
-            #ari_tags_prediction = self.operand_predictor(selected_numbers_output)
-            #_ , ari_tags_scores_order = torch.sort(ari_tags_prediction,dim = 0,descending= True)
-            #opd_ari_order = ari_tags_scores_order[:,:,1].detach().cpu().numpy()
-            #opd2_ari_order = ari_tags_scores_order[:,:,2].detach().cpu().numpy()
-
             pred_ari_tags_class = torch.argmax(operand_prediction[:num_numbers],dim = -1).detach().cpu().numpy()
             pred_order = pred_order.detach().cpu().numpy()
             pred_opt_class = torch.zeros([batch_size,self.num_ops - 1 , self.num_ops - 1],device = device)
@@ -587,11 +565,6 @@ class TagopModel(nn.Module):
                     pred_opd2_opt_scores[:,j,i-1] = ari_opt_prediction[:,2]
                     pred_opt_class[:,j,i-1] = torch.argmax(ari_opt_prediction,dim = -1)
             pred_opt_class = pred_opt_class.detach().cpu().numpy()
-
-            #print(pred_ari_tags_class)
-            #print(pred_ari_class)
-            #print(pred_opt_class)
-            #print("----------------------------------------")
             pred_opd1_opt_scores = pred_opd1_opt_scores.detach().cpu().numpy()
             pred_opd2_opt_scores = pred_opd2_opt_scores.detach().cpu().numpy()
 
@@ -641,25 +614,20 @@ class TagopModel(nn.Module):
                 if num_numbers == 0:
                     answer = ""
                 else:
-                    #selected_numbers = [selected_numbers_batch[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
                     selected_numbers = selected_numbers_batch[bsz]
-
                     if len(selected_numbers) == 0:
                         answer = ""
                     else:
                         selected_numbers_labels = [pred_ari_tags_class[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
-                        #selected_numbers_ids = [i for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
                         temp_ans = []
                         for roud in range(self.num_ops):
                             if "STP" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["STP"]:
                                 if roud == 0:
                                     answer = ""
                                     print("stop at first round")
-                                    #current_ops = ["ignore"] * self.num_ops
                                     current_ops[roud] = "Stop"
                                 else:
                                     answer = temp_ans[-1]
-                                    #current_ops[roud:] = ["Stop"]*(self.num_ops - roud)
                                     current_ops[roud] = "Stop"
                                 break
                             roud_selected_numbers = [selected_numbers[i] for i in range(len(selected_numbers)) if selected_numbers_labels[i][roud] != 0]
@@ -677,7 +645,6 @@ class TagopModel(nn.Module):
                                     answer = ""
                                 else:
                                     answer  =temp_ans[-1]
-                                #current_ops = ["ignore"] * self.num_ops
                                 current_ops[roud] = "Stop"
                                 break
                             else:
