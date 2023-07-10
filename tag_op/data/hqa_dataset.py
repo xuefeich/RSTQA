@@ -513,7 +513,7 @@ def question_tokenize(question, tokenizer, mapping, answer_type):
                 tokens[-1] += c
             prev_is_whitespace = False
     if wait_add:
-        if 1 in current_tags[start_index:len(text)]:
+        if 1 in current_tags[start_index:len(question)]:
             tags.append(1)
         else:
             tags.append(0)
