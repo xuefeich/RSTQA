@@ -1436,7 +1436,7 @@ class TagTaTQATestReader(object):
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
         table_mask, table_index, tags, token_type_ids ,opt_mask,opt_index , question_mask,question_index= \
-            _test_concat(question_ids, question_tags , question_index
+            _test_concat(question_ids, question_tags , question_index,
                     table_ids, table_tags, table_cell_index,
                     paragraph_ids, paragraph_tags, paragraph_index,
                     self.sep,self.opt, self.question_length_limit,
