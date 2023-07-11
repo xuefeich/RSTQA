@@ -229,6 +229,16 @@ def op_squence(ops,avg):
         for i in range(1, n):
             for j in range(1, len(ops[i])):
                 if isinstance(ops[i][j], list):
+                    getk = False
+                    for k in range(0, i):
+                        if ops[k] == ops[i][j]:
+                            getk = True
+                    if not getk:
+                        ops.insert(i,ops[i][j])
+                            
+        for i in range(1, n):
+            for j in range(1, len(ops[i])):
+                if isinstance(ops[i][j], list):
                     for k in range(0, i):
                         if ops[k] == ops[i][j]:
                             op_squ[i][j] = str(k)
