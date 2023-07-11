@@ -991,7 +991,7 @@ class TagTaTQAReader(object):
             try:
                if _is_average(num_facts,answer):
                    ari_ops = [self.ari_ops['AVERAGE']]
-                   ari_tags = {'table':[table_tags],'para':[paragraph_tags], 'question' : question_tags,'operation':[[0]*self.num_ops]}
+                   ari_tags = {'table':[table_tags],'para':[paragraph_tags], 'question' : [question_tags],'operation':[[0]*self.num_ops]}
                    isavg = 1
             except:
                 isavg = 0
@@ -1009,10 +1009,10 @@ class TagTaTQAReader(object):
                if dvt_split_suc == 1:
                    ari_ops = [self.ari_ops[i[0]] for i in ari_operations]
                    operands = [i[1:] for i in ari_operations]
-                   ari_tags = {'table':[],'para':[],'operation':[]}
+                   ari_tags = {'question':[],'table':[],'para':[],'operation':[]}
 
                    for i,opds in enumerate(operands):
-                       temp_mapping,operand_one_mapping,operand_two_mapping = split_mapping(opds,answer_mapping,table,paragraphs)
+                       temp_mapping,operand_one_mapping,operand_two_mapping = split_mapping(opds,answer_mapping,question,table,paragraphs)
                        if temp_mapping == None:
                            operator_class = None
                            break
