@@ -906,7 +906,7 @@ class TagTaTQAReader(object):
             distinct_si = []
             for  i , ni in enumerate(number_indexes):
                 distinct_si.append(ni[0])
-                p = 10 - len(ni)
+                p = 20 - len(ni)
                 if  p > 0:
                     number_indexes[i] += [0] * p
                 else:
