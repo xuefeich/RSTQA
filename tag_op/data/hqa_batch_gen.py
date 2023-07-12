@@ -102,7 +102,7 @@ class TaTQABatchGen(object):
             operator_labels = torch.LongTensor(bsz)
             scale_labels = torch.LongTensor(bsz)
             ari_labels = torch.LongTensor([])
-            selected_indexes = np.zeros([1,11])
+            selected_indexes = np.zeros([1,21])
             opt_mask = torch.LongTensor(bsz)
             ari_ops = torch.LongTensor(bsz,self.num_ops)
             opt_labels = torch.LongTensor(bsz,self.num_ops-1,self.num_ops-1)
@@ -132,14 +132,14 @@ class TaTQABatchGen(object):
                 if selected_indexes_batch[i] != []:
                     ari_labels = torch.cat((ari_labels , ari_labels_batch[i]) , dim = 0)
                     num = selected_indexes_batch[i].shape[0]
-                    sib = np.zeros([num,11])
+                    sib = np.zeros([num,21])
                     for j in range(num):
                         sib[j,0] = i
                         try:
                             sib[j,1:] = selected_indexes_batch[i][j]
                         except:
                             print(selected_indexes_batch[i][j])
-                            sib[j,1:] = selected_indexes_batch[i][j][:10]
+                            sib[j,1:] = selected_indexes_batch[i][j][:20]
                     selected_indexes = np.concatenate((selected_indexes , sib) , axis = 0)
 
                 order_labels[i] = order_labels_batch[i]
