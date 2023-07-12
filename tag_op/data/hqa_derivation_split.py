@@ -223,8 +223,11 @@ def get_token_list(derivation):
     return tokens
 
 def op_squence(ops,avg):
+    for i in range(1, len(ops)):
+        if ops[i] in ops[:i]:
+            del ops[i]
     n = len(ops)
-    op_squ = deepcopy(ops)
+    #op_squ = deepcopy(ops)
     if n > 1:
         for i in range(1, n):
             for j in range(1, len(ops[i])):
