@@ -17,7 +17,7 @@ parser.add_argument("--mode", type=str, default='train')
 parser.add_argument("--num_arithmetic_operators",type=int,default=6)
 
 args = parser.parse_args()
-args.passage_length_limit = 464 - args.num_arithmetic_operators
+args.passage_length_limit = 462 - args.num_arithmetic_operators
 if args.encoder == 'roberta':
     tokenizer = RobertaTokenizer.from_pretrained(args.input_path + "/roberta.large")
     sep = '<s>'
