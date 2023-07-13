@@ -283,7 +283,7 @@ def op_squence(ops,avg):
     lops = len(op_squ)
     for i in range(lops):
         if op_squ[i][0] == '+':
-            if len(op_squ) == 2 and (op_squ[i][1] == 1 or op_squ[i][2]) == 1:
+            if len(op_squ[i]) == 3 and (op_squ[i][1] == 1 or op_squ[i][2]) == 1:
                 inc_number = op_squ[i][1] if op_squ[i][1] != 1 else op_squ[i][2]
                 op_squ[i] = ["INC", inc_number]
             else:
