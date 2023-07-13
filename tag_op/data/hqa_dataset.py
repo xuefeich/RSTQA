@@ -1351,14 +1351,14 @@ class TagTaTQATestReader(object):
                                         if qv[o] == ari[2]:
                                             opd2 = o
                                     elif o < tl:
-                                        if tv[o] == ari[1]:
+                                        if tv[o-ql] == ari[1]:
                                             opd1 = o
-                                        if tv[o] == ari[2]:
+                                        if tv[o-ql] == ari[2]:
                                             opd2 = o
                                     else:
-                                        if pv[o-tl] == ari[1]:
+                                        if pv[o-tl-ql] == ari[1]:
                                             opd1 = o
-                                        if pv[o-tl] == ari[2]:
+                                        if pv[o-tl-ql] == ari[2]:
                                             opd2 = o
                                 if opd1 == -100 or opd2 == -100:
                                     print("order fail")
@@ -1374,9 +1374,10 @@ class TagTaTQATestReader(object):
                                 operator_classes[i] = "Division"
                                 opd1 = -100
                                 opd2 = -100
+                                ql = len(qv)
                                 tl = len(tv)
                                 pl = len(pv)
-                                for o in range(tl+pl):
+                                for o in range(qv+tl+pl):
                                     if isinstance(ari[1],str) or isinstance(ari[2],str):
                                         break
                                     if o < ql:
@@ -1385,14 +1386,14 @@ class TagTaTQATestReader(object):
                                         if qv[o] == ari[2]:
                                             opd2 = o
                                     elif o < tl:
-                                        if tv[o] == ari[1]:
+                                        if tv[o-ql] == ari[1]:
                                             opd1 = o
-                                        if tv[o] == ari[2]:
+                                        if tv[o-ql] == ari[2]:
                                             opd2 = o
                                     else:
-                                        if pv[o-tl] == ari[1]:
+                                        if pv[o-tl-ql] == ari[1]:
                                             opd1 = o
-                                        if pv[o-tl] == ari[2]:
+                                        if pv[o-tl-ql] == ari[2]:
                                             opd2 = o
                                 if opd1 == -100 or opd2 == -100:
                                     print("order fail")
