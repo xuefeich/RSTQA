@@ -1009,10 +1009,14 @@ class TagTaTQAReader(object):
                                 if isinstance(ac[j],list):
                                     operator_class = None
                                     dvt_split_suc = 0
-                                    #print(dervation)
+                                    # print(derivation)
+                                    # print("derivation split err")
+                                    # print("---------------------------------------")
                                     break
                except:
-                   #print("derivation split err")
+                #   print(derivation)
+                #   print("derivation split err")
+                #   print("---------------------------------------")
                    operator_class = None
                    dvt_split_suc = 0
                if dvt_split_suc == 1:
@@ -1023,6 +1027,12 @@ class TagTaTQAReader(object):
                    for i,opds in enumerate(operands):
                        temp_mapping,operand_one_mapping,operand_two_mapping = split_mapping(opds,answer_mapping,question,table,paragraphs)
                        if temp_mapping == None:
+                        #   print(opds)
+                        #   print(answer_mapping)
+                        #   print(question)
+                        #   print(table)
+                        #   print(paragraphs)
+                        #   print("----------------------------------------------")
                            operator_class = None
                            break
                        else:
@@ -1095,10 +1105,10 @@ class TagTaTQAReader(object):
         if operator_class is None:
             self.skip_count += 1
             if answer_type == "arithmetic":
+                self.ari_skip += 1
                 print(derivation)
                 print("derivation split err")
                 print("---------------------------------------")
-                self.ari_skip += 1
             else:
                 self.op_skip += 1
             return None
@@ -1350,7 +1360,7 @@ class TagTaTQATestReader(object):
                                             opd1 = o
                                         if qv[o] == ari[2]:
                                             opd2 = o
-                                    elif o < tl:
+                                    elif o < ql+tl:
                                         if tv[o-ql] == ari[1]:
                                             opd1 = o
                                         if tv[o-ql] == ari[2]:
@@ -1361,7 +1371,7 @@ class TagTaTQATestReader(object):
                                         if pv[o-tl-ql] == ari[2]:
                                             opd2 = o
                                 if opd1 == -100 or opd2 == -100:
-                                    print("order fail")
+                                    #print("order fail")
                                     order_labels[i] = -100
                                 else:
                                     if opd1 <= opd2:
@@ -1377,7 +1387,7 @@ class TagTaTQATestReader(object):
                                 ql = len(qv)
                                 tl = len(tv)
                                 pl = len(pv)
-                                for o in range(qv+tl+pl):
+                                for o in range(ql+tl+pl):
                                     if isinstance(ari[1],str) or isinstance(ari[2],str):
                                         break
                                     if o < ql:
@@ -1385,7 +1395,7 @@ class TagTaTQATestReader(object):
                                             opd1 = o
                                         if qv[o] == ari[2]:
                                             opd2 = o
-                                    elif o < tl:
+                                    elif o < ql+tl:
                                         if tv[o-ql] == ari[1]:
                                             opd1 = o
                                         if tv[o-ql] == ari[2]:
@@ -1396,7 +1406,7 @@ class TagTaTQATestReader(object):
                                         if pv[o-tl-ql] == ari[2]:
                                             opd2 = o
                                 if opd1 == -100 or opd2 == -100:
-                                    print("order fail")
+                                    #print("order fail")
                                     order_labels[i] = -100
                                 else:
                                     if opd1 <= opd2:
@@ -1446,7 +1456,6 @@ class TagTaTQATestReader(object):
             if gold_ops is None:
                 gold_ops = ["ignore"] *self.num_ops
         #question_ids = question_tokenizer(question_text, self.tokenizer)
-
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
         table_mask, table_index, tags, token_type_ids ,opt_mask,opt_index , question_mask,question_index= \
             _test_concat(question_ids, question_tags , question_index,
