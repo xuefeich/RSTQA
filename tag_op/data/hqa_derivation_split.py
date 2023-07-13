@@ -59,6 +59,7 @@ def infix_evaluator(infix_expression: str,avg : bool) -> int:
     '''这是中缀表达式求值的函数
     :参数 infix_expression:中缀表达式
     '''
+    infix_expression = infix_expression.replace("million",'').replace("thousand",'').replace("billion",'')
     oplist = []
     token_list = get_token_list(infix_expression)
     #print(token_list)
@@ -223,12 +224,15 @@ def get_token_list(derivation):
     return tokens
 
 def op_squence(ops,avg):
-    for i in range(1, len(ops)):
-        if ops[i] in ops[:i]:
-            del ops[i]
-    n = len(ops)
     #op_squ = deepcopy(ops)
+    n = len(ops)
     if n > 1:
+        dn = 0
+        for i in range(1, len(ops)):
+            if ops[i-dn] in ops[:i-dn]:
+                del ops[i - dn]
+                dn += 1
+        n = len(ops)
         for i in range(1, n):
             for j in range(1, len(ops[i])):
                 if isinstance(ops[i][j], list):
@@ -245,23 +249,37 @@ def op_squence(ops,avg):
                         ops.insert(i, ops[i][j])
         #print(ops)
         op_squ = deepcopy(ops)
+        ins = 0
         for i in range(1, n):
             for j in range(1, len(ops[i])):
                 if isinstance(ops[i][j], list):
+                    getk = False
                     for k in range(0, i):
                         if ops[k] == ops[i][j]:
-                            op_squ[i][j] = str(k)
+                            op_squ[i+ins][j] = str(k)
+                            getk = True
+                    if not getk:
+                        op_squ.insert(i+ins, ops[i][j])
+                        op_squ[i+ins+1][j] = str(i)
+                        ins += 1
     else:
         for j in range(1, len(ops[0])):
             if isinstance(ops[0][j], list):
                 ops.insert(0, ops[0][j])
         op_squ = deepcopy(ops)
+        ins = 0
         for i in range(1, len(ops)):
             for j in range(1, len(ops[i])):
                 if isinstance(ops[i][j], list):
+                    getk = False
                     for k in range(0, i):
                         if ops[k] == ops[i][j]:
-                            op_squ[i][j] = str(k)
+                            op_squ[i+ins][j] = str(k)
+                            getk = True
+                    if not getk:
+                        op_squ.insert(i+ins, ops[i][j])
+                        op_squ[i+ins+1][j] = str(i)
+                        ins += 1
     lops = len(op_squ)
     for i in range(lops):
         if op_squ[i][0] == '+':
@@ -280,22 +298,9 @@ def op_squence(ops,avg):
         elif op_squ[i][0] == '/':
             op_squ[i][0] = 'DIVIDE'
 
-    if avg == False:
-        op_squ_out = deepcopy(op_squ)
-        for i , op in enumerate(op_squ):
-            if op[0] == 'AVERAGE':
-                op_squ_out[i][0] = 'SUM'
-                count_op = ['COUNT']+op[1:]
-                op_squ_out.insert(i+1,count_op)
-                op_squ_out.insert(i+2,['DIVIDE',str(i) , str(i+1)])
-                if i+3 < len(op_squ_out):
-                    for j in range(i+3,len(op_squ_out)):
-                        for opd in range(1,len(op_squ_out[j])):
-                            if isinstance(op_squ_out[j][opd],str):
-                                op_squ_out[j][opd] = str(int(op_squ_out[j][opd]) + 2)
-        return op_squ_out
-    else:
-        return op_squ
+    return op_squ
 
 #ops = infix_evaluator('(5,940 - 598) / 598')
 #print(ops)
+if __name__ == '__main__':
+    print(infix_evaluator('((94.5+130)-(86.5+121.8))/(86.5+121.8)',True))
