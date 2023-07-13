@@ -1003,6 +1003,14 @@ class TagTaTQAReader(object):
                     if len(ari_operations) > self.num_ops:
                         operator_class = None
                         dvt_split_suc = 0
+                    else:
+                        for ac in ari_operations:
+                            for j in range(1,len(ac)):
+                                if isinstance(ac[j],list):
+                                    operator_class = None
+                                    dvt_split_suc = 0
+                                    print(dervation)
+                                    break
                except:
                    print("derivation split err")
                    operator_class = None
