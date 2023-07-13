@@ -662,6 +662,12 @@ class TagopModel(nn.Module):
                                 elif "AVERAGE" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["AVERAGE"]:
                                     temp_ans.append(np.mean(roud_selected_numbers))
                                     current_ops[roud] = "Average"
+                                elif "INC" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["INC"]:
+                                    temp_ans.append(top_numbers[bsz,roud] + 1)
+                                    current_ops[roud] = "ratio increasing"
+                                elif "DEC" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["DEC"]:
+                                    temp_ans.append(1 - top_numbers[bsz,roud])
+                                    current_ops[roud] = "ratio decreasing"
                                 else:
                                     operand_one = np.nan
                                     operand_two = np.nan
