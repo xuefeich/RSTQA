@@ -1009,11 +1009,12 @@ class TagTaTQAReader(object):
                                 if isinstance(ac[j],list):
                                     operator_class = None
                                     dvt_split_suc = 0
-                                    print(dervation)
+                                    #print(dervation)
                                     break
                except:
-                   print("derivation split err")
+                   #print("derivation split err")
                    operator_class = None
+                   dvt_split_suc = 0
                if dvt_split_suc == 1:
                    ari_ops = [self.ari_ops[i[0]] for i in ari_operations]
                    operands = [i[1:] for i in ari_operations]
@@ -1094,6 +1095,9 @@ class TagTaTQAReader(object):
         if operator_class is None:
             self.skip_count += 1
             if answer_type == "arithmetic":
+                print(derivation)
+                print("derivation split err")
+                print("---------------------------------------")
                 self.ari_skip += 1
             else:
                 self.op_skip += 1
