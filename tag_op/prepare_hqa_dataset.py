@@ -8,7 +8,7 @@ from transformers.models.bert import BertTokenizer
 
 import json
 parser = argparse.ArgumentParser()
-parser.add_argument("--input_path", type=str, default='./dataset_tagop')
+parser.add_argument("--input_path", type=str, default='./HQA')
 parser.add_argument("--output_dir", type=str, default="./tag_op/cache")
 parser.add_argument("--passage_length_limit", type=int, default=458)
 parser.add_argument("--question_length_limit", type=int, default=46)
