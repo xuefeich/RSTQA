@@ -415,7 +415,7 @@ class TagopModel(nn.Module):
 
 
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
-        question_tag_prediction = self.tag_predictor(question_output))
+        question_tag_prediction = self.tag_predictor(question_output)
         question_tag_prediction = util.masked_log_softmax(question_tag_prediction, mask=None)
         question_tag_prediction = util.replace_masked_values(question_tag_prediction, table_mask.unsqueeze(-1), 0)
         question_tag_labels = util.replace_masked_values(tag_labels.float(), question_mask, 0)
