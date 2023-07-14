@@ -39,6 +39,8 @@ def _clean_num(text:str):
 def is_number(text: str) -> bool:
     if text == "-" or text == "—":
         return True
+    elif "double" in text or "twice" in text:
+        return True
     try:
         words = " ".join([_clean_num(w) for w in text.split()]).split()
         if len(words) == 0:
@@ -91,6 +93,8 @@ def word_scale_handle(x):
 def to_number(text:str) -> float:
     if text == "—" or text == "-":
         return 0
+    elif "double" in text or "twice" in text:
+        return 2
     num = extract_one_num_from_str(text)
     scale_val = word_scale_handle(text)
     negative_flag = negative_num_handle(text)
