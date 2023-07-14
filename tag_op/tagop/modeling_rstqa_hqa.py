@@ -248,14 +248,14 @@ class TagopModel(nn.Module):
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
 
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
-        question_tag_prediction = self.tag_predictor(question_output))
+        question_tag_prediction = self.tag_predictor(question_output)
         question_tag_prediction = util.masked_log_softmax(question_tag_prediction, mask=None)
         question_tag_prediction = util.replace_masked_values(question_tag_prediction, table_mask.unsqueeze(-1), 0)
         question_tag_labels = util.replace_masked_values(tag_labels.float(), question_mask, 0)
 
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
         #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
-        table_tag_prediction = self.tag_predictor(table_sequence_output))
+        table_tag_prediction = self.tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
