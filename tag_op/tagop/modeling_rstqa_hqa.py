@@ -224,6 +224,7 @@ class TagopModel(nn.Module):
                 question_tokens: List[List[str]],
                 paragraph_numbers: List[np.ndarray],
                 table_cell_numbers: List[np.ndarray],
+                question_numbers: List[np.ndarray],
                 question_ids: List[str],
                 position_ids: torch.LongTensor = None,
                 table_mask: torch.LongTensor = None,
