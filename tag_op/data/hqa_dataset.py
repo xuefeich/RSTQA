@@ -480,7 +480,7 @@ def question_tokenize(question, tokenizer, mapping, answer_type):
     mapping_content = []
 
     question_mapping = False
-    if "question" in list(mapping.keys()) and len(mapping["question"]) != 0:
+    if mapping and "question" in list(mapping.keys()) and len(mapping["question"]) != 0:
         question_mapping = True
     current_tags = [0 for i in range(len(question))]
     prev_is_whitespace = True
