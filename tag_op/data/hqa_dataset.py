@@ -980,7 +980,7 @@ class TagTaTQAReader(object):
                      answer_type: str, answer:str, derivation: str, facts:list,  answer_mapping: Dict, scale: str, question_id:str):
 
         
-        question_text = question.strip().replace("double","2 ").replace("twice","2")
+        question_text = question.strip()
         table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
                             table_tokenize(table, self.tokenizer, answer_mapping, answer_type)
         paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
@@ -1438,7 +1438,7 @@ class TagTaTQATestReader(object):
 
     def _to_test_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
                      answer_type: str, answer:str, answer_mapping, scale: str, question_id:str, derivation, facts):
-        question_text = question.strip().replace("double","2 ").replace("twice","2")
+        question_text = question.strip()
 
         '''
         if self.mode == "dev":
