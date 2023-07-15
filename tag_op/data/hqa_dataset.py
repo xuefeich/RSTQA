@@ -211,11 +211,7 @@ def table_tokenize(table, tokenizer, mapping, answer_type):
                 continue
             table_ids += cell_ids
             if is_number(table[i][j]):
-                k = table[i][j].find("(")
-                if k != -1 and is_number(table[i][j][:k]):
-                    table_cell_number_value.append(to_number(table[i][j][k:]+"()"))
-                else:
-                    table_cell_number_value.append(to_number(table[i][j]))
+                table_cell_number_value.append(to_number(table[i][j]))
             else:
                 table_cell_number_value.append(np.nan)
             table_cell_tokens.append(table[i][j])
@@ -252,11 +248,7 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
                 continue
             table_ids += cell_ids
             if is_number(table[i][j]):
-                k = table[i][j].find("(")
-                if k != -1 and is_number(table[i][j][:k]):
-                    table_cell_number_value.append(to_number(table[i][j][k:]+"()"))
-                else:
-                    table_cell_number_value.append(to_number(table[i][j]))
+                table_cell_number_value.append(to_number(table[i][j]))
             else:
                 table_cell_number_value.append(np.nan)
             table_cell_tokens.append(table[i][j])
