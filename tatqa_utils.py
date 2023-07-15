@@ -95,6 +95,10 @@ def to_number(text:str) -> float:
         return 0
     elif "double" in text or "twice" in text:
         return 2
+    k = text.find("(")
+    if k!= -1:
+        if is_number(text[:k]):
+            text = "("+text[:k]+")"
     num = extract_one_num_from_str(text)
     scale_val = word_scale_handle(text)
     negative_flag = negative_num_handle(text)
