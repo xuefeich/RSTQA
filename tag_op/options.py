@@ -31,7 +31,7 @@ def add_train_args(parser: ArgumentParser):
 def add_bert_args(parser: ArgumentParser):
     parser.add_argument("--bert_learning_rate", type=float, help="bert learning rate.")
     parser.add_argument("--bert_weight_decay", type=float, help="bert weight decay.")
-    parser.add_argument("--roberta_model", type=str, help="robert modle path.", default="dataset_tagop/roberta.large")
+    parser.add_argument("--roberta_model", type=str, help="robert modle path.", default="model/roberta.large")
 
 def add_inference_args(parser: ArgumentParser):
     parser.add_argument("--pre_path", type=str, help="Prepath")
