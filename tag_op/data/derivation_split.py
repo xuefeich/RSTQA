@@ -180,7 +180,6 @@ def get_token_list(derivation):
 
         else:
             if current_t != '':
-
                 if negs == 1:
                     if current_t[0] == '-':
                         current_t = current_t.lstrip('-')
