@@ -11,13 +11,6 @@ def find_table_mapping(number,table):
                 cell_number = to_number(cell)
                 if abs(abs(number) - abs(cell_number)) < 0.0001 or abs(abs(number) - abs(cell_number) * 100) < 0.0001 or abs(abs(number) - abs(cell_number) * 0.01) < 0.0001:
                     return [i,j]
-                else:
-                    ns = cell.find("(")
-                    if ns != -1:
-                        cell_number = to_number(cell[:ns]+"()")
-                        if cell_number != None:
-                            if abs(abs(number) - abs(cell_number)) < 0.0001 or abs(abs(number) - abs(cell_number) * 100) < 0.0001 or abs(abs(number) - abs(cell_number) * 0.01) < 0.0001:
-                                return [i , j]
             except:
                 continue
 
@@ -34,19 +27,6 @@ def find_question_mapping(number,question):
                         return [i,bf+1]
                     else:
                         return [i, i + len(qt)]
-            else:
-                ns = qt.find("(")
-                if ns != -1:
-                    text_number = to_number(qt[:ns]+"()")
-                    if text_number != None:
-                        if abs(abs(number) - abs(text_number)) < 0.0001 or abs(abs(number) - abs(text_number) * 100) < 0.0001 or abs(abs(number) - abs(text_number) * 0.01) < 0.0001:
-                            i = question.find(qt)
-                            if i!= -1:
-                                bf = question.find("%")
-                                if bf != -1:
-                                    return [i,bf+1]
-                                else:
-                                    return [i, i + len(qt)]
 def split_mapping(operands,mapping,question,table,paras):
     temp_mapping = {}
     operand_one_mapping= {}
