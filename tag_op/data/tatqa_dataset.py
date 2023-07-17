@@ -1447,6 +1447,7 @@ class TagTaTQATestReader(object):
         if self.mode == "test":
             gold_ops= None
             scale = None
+            order_labels = None
         else:
             self.scale_count[scale] += 1
         answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from,
