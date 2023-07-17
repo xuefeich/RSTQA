@@ -9,6 +9,7 @@ from transformers.models.bert import BertTokenizer
 import json
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_path", type=str, default='./dataset_tagop')
+parser.add_argument("--model_path", type=str, default='./model')
 parser.add_argument("--output_dir", type=str, default="./tag_op/cache")
 parser.add_argument("--passage_length_limit", type=int, default=458)
 parser.add_argument("--question_length_limit", type=int, default=46)
@@ -19,7 +20,7 @@ parser.add_argument("--num_arithmetic_operators",type=int,default=6)
 args = parser.parse_args()
 
 if args.encoder == 'roberta':
-    tokenizer = RobertaTokenizer.from_pretrained(args.input_path + "/roberta.large")
+    tokenizer = RobertaTokenizer.from_pretrained(args.model_path + "/roberta.large")
     sep = '<s>'
     #tokenizer.add_special_tokens({'additional_special_tokens':['<OPT>','<STP>','<SUM>','<DIFF>','<DIVIDE>','<TIMES>','<AVERAGE>']})
     tokenizer.add_special_tokens({'additional_special_tokens':['<OPT>']})
