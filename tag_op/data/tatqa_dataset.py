@@ -1496,7 +1496,7 @@ class TagTaTQATestReader(object):
                 if instance is not None:
                     instances.append(instance)
                     #if "Stop" not in instance["answer_dict"]["gold_ops"] and "ignore" not in instance["answer_dict"]["gold_ops"]:
-                    if instance["answer_dict"]["gold_ops"][3] == "Stop":
+                    if self.mode == "dev"and instance["answer_dict"]["gold_ops"][3] == "Stop":
                        maxround_instances.append(instance)
             '''
             for question_answer in questions:
