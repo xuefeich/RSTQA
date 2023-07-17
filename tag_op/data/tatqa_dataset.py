@@ -1043,7 +1043,7 @@ class TagTaTQAReader(object):
             if isavg == 0:
                dvt_split_suc = 0
                try:
-                    ari_operations = infix_evaluator(derivation,True)
+                    ari_operations = infix_evaluator(derivation)
                     dvt_split_suc = 1
                     if len(ari_operations) > self.num_ops:
                         operator_class = None
@@ -1327,7 +1327,7 @@ class TagTaTQATestReader(object):
                 if isavg == 0:
                     dvt_split_suc = 0
                     try:
-                       ari_operations = infix_evaluator(derivation,True)
+                       ari_operations = infix_evaluator(derivation)
                        #print(len(ari_operations))
                        for ari in ari_operations:
                            for num in ari[1:]:
