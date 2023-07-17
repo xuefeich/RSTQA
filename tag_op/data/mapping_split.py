@@ -129,26 +129,24 @@ def split_mapping(operands,mapping,table,paras):
                         operand_two_mapping["table"].append(mt)
                     else:
                         operand_two_mapping["table"] = [mt]
-            '''
-            if "table" in mapping:
-                map_index = find_table_mapping(opd,table)
-                if map_index != None:
-                    if "table" in temp_mapping:
-                        temp_mapping["table"].append(mt)
+        if maped == 0 and "table" in mapping:
+            map_index = find_table_mapping(opd,table)
+            if map_index != None:
+                if "table" in temp_mapping:
+                    temp_mapping["table"].append(mt)
+                else:
+                    temp_mapping["table"] = [mt]
+                maped = 1
+                if count == 0:
+                    if "table" in operand_one_mapping:
+                        operand_one_mapping["table"].append(mt)
                     else:
-                        temp_mapping["table"] = [mt]
-                    maped = 1
-                    if count == 0:
-                        if "table" in operand_one_mapping:
-                            operand_one_mapping["table"].append(mt)
-                        else:
-                            operand_one_mapping["table"] = [mt]
-                    elif count == 1:
-                        if "table" in operand_two_mapping:
-                            operand_two_mapping["table"].append(mt)
-                        else:
-                            operand_two_mapping["table"] = [mt]
-            '''
+                        operand_one_mapping["table"] = [mt]
+                elif count == 1:
+                    if "table" in operand_two_mapping:
+                        operand_two_mapping["table"].append(mt)
+                    else:
+                        operand_two_mapping["table"] = [mt]
         if maped == 0:
             return None , None , None
         count += 1
