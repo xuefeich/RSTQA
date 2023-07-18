@@ -828,7 +828,7 @@ class TagTaTQAReader(object):
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
                         tags_ground_truth, operator_ground_truth, scale_ground_truth,paragraph_tokens, 
                         table_cell_tokens, answer_dict, question_id, ari_ops,opt_mask,opt_index,opt_labels,ari_labels,order_labels,
-                       question_mask,question_index,question_number_value,question_tokens):
+                       question_mask,question_index,question_number_value,question_tokens,is_counter):
 
         if ari_ops != None:
             ari_ops_padding = self.num_ops - len(ari_ops)
@@ -954,6 +954,7 @@ class TagTaTQAReader(object):
             "question_index": np.array(question_index),
             "tag_labels": np.array(tags_ground_truth),
             "operator_label": int(operator_ground_truth),
+            "is_counter":is_counter,
             "scale_label": int(scale_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
@@ -969,7 +970,7 @@ class TagTaTQAReader(object):
         }
 
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
-                     answer_type: str, answer:str, derivation: str, facts:list,  answer_mapping: Dict, scale: str, question_id:str):
+                     answer_type: str, answer:str, derivation: str, facts:list,  answer_mapping: Dict, scale: str,is_counter:int, question_id:str):
 
         
         question_text = question.strip()
@@ -1162,7 +1163,7 @@ class TagTaTQAReader(object):
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                     paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, operator_class, scale_class,
                     paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,ari_round_labels,order_labels,
-                    question_mask,question_index,question_number_value,question_tokens)
+                    question_mask,question_index,question_number_value,question_tokens,is_counter)
 
 
     def _read(self, file_path: str):
@@ -1220,7 +1221,7 @@ class TagTaTQAReader(object):
                     
                     instance = self._to_instance(question, table, paragraphs, answer_from,
                                     answer_type, answer, counter_derivation,  facts,
-                                    counter_answer_mapping, scale, question_answer["uid"])
+                                    counter_answer_mapping, scale,is_counter question_answer["uid"])
                     if instance is not None:
                         instances.append(instance)
                 except RuntimeError as e :
