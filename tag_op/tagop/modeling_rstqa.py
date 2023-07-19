@@ -158,8 +158,8 @@ class TagopModel(nn.Module):
         self.scale_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
         #self.round_predictor = FFNLayer(3 * hidden_size, hidden_size, scale_classes, dropout_prob)
         # tag predictor: two-class classification
-        self.tag_predictor = FFNLayer(2*hidden_size,hidden_size,  2, dropout_prob)
-
+        self.table_tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
+        self.para_tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
         self.operand_predictor = FFNLayer(2*hidden_size, hidden_size, 2, dropout_prob)
         #self.operand_predictor = BiFFNLayer(hidden_size,hidden_size, hidden_size, 2, dropout_prob)
         self.opt_predictor = FFNLayer(2*hidden_size, hidden_size, 3, dropout_prob)
@@ -270,35 +270,27 @@ class TagopModel(nn.Module):
 
         cls_output = sequence_output[:, 0, :]
 
-        cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
+        #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
 
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_reduce_mean = torch.mean(question_output, dim=1)
 
         #operator_prediction = self.operator_predictor(cls_output)
         #predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
-
-
-        #opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
-
-        #opt_output = sequence_output.gather(index = opt_index , dim = 1)
-        #for bsz in range(batch_size):
-        #    opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
-
-
         #ari_ops_prediction = self.ari_predictor(opt_output)
 
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
-        table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
-        table_tag_prediction = self.tag_predictor(torch.cat((table_sequence_output,table_cls_output),dim = -1))
+        #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
+        #table_tag_prediction = self.tag_predictor(torch.cat((table_sequence_output,table_cls_output),dim = -1))
+        table_tag_prediction = self.table_tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
 
         paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
-
-        paragraph_tag_prediction = self.tag_predictor(torch.cat((paragraph_sequence_output,paragraph_cls_output),dim = -1))
+        #paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
+        #paragraph_tag_prediction = self.tag_predictor(torch.cat((paragraph_sequence_output,paragraph_cls_output),dim = -1))
+        paragraph_tag_prediction = self.para_tag_predictor(paragraph_sequence_output)
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
@@ -459,7 +451,7 @@ class TagopModel(nn.Module):
         sequence_output = outputs[0]
 
         cls_output = sequence_output[:, 0, :]
-        cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
+        #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_reduce_mean = torch.mean(question_output, dim=1)
 
@@ -477,15 +469,17 @@ class TagopModel(nn.Module):
 
 
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
-        table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
-        table_tag_prediction = self.tag_predictor(torch.cat((table_sequence_output,table_cls_output),dim = -1))
+        #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
+        #table_tag_prediction = self.tag_predictor(torch.cat((table_sequence_output,table_cls_output),dim = -1))
+        table_tag_prediction = self.table_tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
 
         paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_tag_prediction = self.tag_predictor(torch.cat((paragraph_sequence_output,paragraph_cls_output),dim = -1))
+        #paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
+        #paragraph_tag_prediction = self.tag_predictor(torch.cat((paragraph_sequence_output,paragraph_cls_output),dim = -1))
+        paragraph_tag_prediction = self.para_tag_predictor(paragraph_sequence_output)
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
