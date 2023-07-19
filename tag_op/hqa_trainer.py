@@ -99,6 +99,7 @@ def main():
         ari_criterion = nn.CrossEntropyLoss(reduction = "sum"),
         ari_operator_criterion = nn.CrossEntropyLoss(),
         operator_criterion = nn.CrossEntropyLoss(),
+        counter_criterion = nn.CrossEntropyLoss(),
         scale_criterion = nn.CrossEntropyLoss(),
         opt_criterion = nn.CrossEntropyLoss(reduction = "sum"),
         order_criterion = nn.CrossEntropyLoss(reduction = "sum"),
