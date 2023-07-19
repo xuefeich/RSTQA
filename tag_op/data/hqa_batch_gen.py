@@ -168,7 +168,7 @@ class TaTQABatchGen(object):
                 "table_mask": table_mask, "table_cell_index":table_cell_index, "ari_ops":ari_ops,
                 "ari_labels":ari_labels,"opt_labels":opt_labels,"opt_mask":opt_mask,"order_labels":order_labels,"selected_indexes" : selected_indexes[1:],
                 "question_mask":question_mask, "question_index": question_index , "question_numbers" : question_numbers,"question_tokens":question_tokens,
-                "is_counter" :is_counter
+                "counter_labels" :is_counter
             }
 
             if self.args.cuda:
