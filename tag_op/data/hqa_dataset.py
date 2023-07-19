@@ -1118,7 +1118,7 @@ class TagTaTQAReader(object):
             for j in range(len(table[i])):
                 if table[i][j] == '' or table[i][j] == 'N/A' or table[i][j] == 'n/a':
                     table[i][j] = "NONE"
-        table = pd.DataFrame(table, dtype=np.str)
+        table = pd.DataFrame(table, dtype=np.str_)
         column_relation = {}
         for column_name in table.columns.values.tolist():
             column_relation[column_name] = str(column_name)
