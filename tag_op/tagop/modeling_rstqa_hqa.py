@@ -125,6 +125,7 @@ class TagopModel(nn.Module):
                  scale_classes: int,
                  num_ops : int,
                  operator_criterion: nn.CrossEntropyLoss = None,
+                 counter_criterion: nn.CrossEntropyLoss = None,
                  ari_criterion: nn.CrossEntropyLoss = None,
                  opt_criterion: nn.CrossEntropyLoss = None,
                  order_criterion: nn.CrossEntropyLoss = None,
@@ -155,6 +156,8 @@ class TagopModel(nn.Module):
         # scale predictor
         self.scale_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
         self.tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
+        self.if_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
+        self.if_tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
         self.operand_predictor = FFNLayer(2*hidden_size, hidden_size, 2, dropout_prob)
         self.opt_predictor = FFNLayer(2*hidden_size, hidden_size, 3, dropout_prob)
         self.order_predictor = FFNLayer(3*hidden_size, hidden_size, 2, dropout_prob)
@@ -213,6 +216,7 @@ class TagopModel(nn.Module):
                 opt_mask : torch.LongTensor,
                 tag_labels: torch.LongTensor,
                 operator_labels: torch.LongTensor,
+                counter_labels: torch.LongTensor,
                 ari_ops:torch.LongTensor,
                 ari_labels : torch.LongTensor,
                 order_labels : torch.LongTensor,
@@ -245,11 +249,10 @@ class TagopModel(nn.Module):
         batch_size = sequence_output.shape[0]
 
         cls_output = sequence_output[:, 0, :]
-
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
 
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
-        question_tag_prediction = self.tag_predictor(question_output)
+        question_tag_prediction = self.if_tag_predictor(question_output)
         question_tag_prediction = util.masked_log_softmax(question_tag_prediction, mask=None)
         question_tag_prediction = util.replace_masked_values(question_tag_prediction, table_mask.unsqueeze(-1), 0)
         question_tag_labels = util.replace_masked_values(tag_labels.float(), question_mask, 0)
@@ -269,7 +272,9 @@ class TagopModel(nn.Module):
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
 
-        question_reduce_mean = torch.mean(question_output, dim=1)
+        question_reduce_mean = torch.mean(question_sequence_output, dim=1)
+        counter_prediction = self.if_predictor(question_reduce_mean)
+        counter_prediction_loss = self.counter_criterion(counter_prediction, counter_labels)
         paragraph_reduce_mean = torch.mean(paragraph_sequence_output, dim=1)
         table_reduce_mean = torch.mean(table_sequence_output, dim=1)
         op_output = torch.cat((question_reduce_mean,table_reduce_mean, paragraph_reduce_mean), dim=-1)
@@ -279,17 +284,19 @@ class TagopModel(nn.Module):
         output_dict = {}
         operator_prediction_loss = self.operator_criterion(operator_prediction, operator_labels)
         scale_prediction_loss = self.scale_criterion(scale_prediction, scale_labels)
-        question_tag_prediction = question_tag_prediction.transpose(1, 2)
-        question_tag_prediction_loss = self.NLLLoss(question_tag_prediction, question_tag_labels.long())
+        #question_tag_prediction = question_tag_prediction.transpose(1, 2)
+        #question_tag_prediction_loss = self.NLLLoss(question_tag_prediction, question_tag_labels.long())
         table_tag_prediction = table_tag_prediction.transpose(1, 2)  # [bsz, 2, table_size]
         table_tag_prediction_loss = self.NLLLoss(table_tag_prediction, table_tag_labels.long())
         paragraph_tag_prediction = paragraph_tag_prediction.transpose(1, 2)
         paragraph_token_tag_prediction_loss = self.NLLLoss(paragraph_tag_prediction, paragraph_tag_labels.long())
 
 
-        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + question_tag_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss
+        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss + counter_prediction_loss
 
         for bsz in range(batch_size):
+            if counter_labels[bsz] == 1:
+                output_dict["loss"] = output_dict["loss"] + self.NLLLoss(question_tag_prediction[bsz], question_tag_labels[bsz].long())
             for roud in range(self.num_ops):
                 if ari_ops[bsz,roud] != -100:
                     output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(sequence_output[bsz,opt_mask[bsz]+roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
@@ -434,6 +441,9 @@ class TagopModel(nn.Module):
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
         
         question_reduce_mean = torch.mean(question_output, dim=1)
+        counter_prediction = self.if_predictor(question_reduce_mean)
+        pred_counter_class = torch.argmax(counter_prediction,dim = -1)
+        
         paragraph_reduce_mean = torch.mean(paragraph_sequence_output, dim=1)
         table_reduce_mean = torch.mean(table_sequence_output, dim=1)
 
@@ -490,7 +500,11 @@ class TagopModel(nn.Module):
         pred_order = torch.zeros([batch_size,self.num_ops],device = device)
 
         for bsz in range(batch_size):
-            question_sel_indexes , question_selected_numbers = get_number_index_from_reduce_sequence(question_token_tag_prediction[bsz],question_numbers[bsz])
+            if pred_counter_class[bsz] == 1:
+                question_sel_indexes , question_selected_numbers = get_number_index_from_reduce_sequence(question_token_tag_prediction[bsz],question_numbers[bsz])
+            else:
+                question_sel_indexes = []
+                question_selected_numbers = []
             para_sel_indexes , paragraph_selected_numbers = get_number_index_from_reduce_sequence(paragraph_token_tag_prediction[bsz],paragraph_numbers[bsz])
             table_sel_indexes , table_selected_numbers = get_number_index_from_reduce_sequence(table_cell_tag_prediction[bsz], table_cell_numbers[bsz])
             selected_numbers = question_selected_numbers + paragraph_selected_numbers + table_selected_numbers
