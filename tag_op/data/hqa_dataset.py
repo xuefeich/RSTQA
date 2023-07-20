@@ -906,10 +906,11 @@ class TagTaTQAReader(object):
             distinct_si = []
             for  i , ni in enumerate(number_indexes):
                 distinct_si.append(ni[0])
-                p = 20 - len(ni)
+                p = 10 - len(ni)
                 if  p > 0:
                     number_indexes[i] += [0] * p
                 else:
+                    number_indexes[i] =number_indexes[i][:10]
                     print("long number")
                     if int(question_index[0,ni[0]]) != 0 :
                         print(question_number_value[int(question_index[0,ni[0]]) - 1])
