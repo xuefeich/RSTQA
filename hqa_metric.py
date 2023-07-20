@@ -229,7 +229,7 @@ class TaTQAEmAndF1(object):
                  pred_op=None,
                  gold_op=None,
                  pred_order = None,
-                 #pred_details = None,
+                 pred_details = None,
                  ):  # type: ignore
         """
         :param ground_truth:
@@ -295,7 +295,6 @@ class TaTQAEmAndF1(object):
                         ground_truth_answer_strings
                 )
 
-                '''
                 if f1_score <1:
                     self.f.write(ground_truth["uid"]+'\n')
                     self.f.write("gold_answer "+str(gold_answer)+'\n')
@@ -307,7 +306,7 @@ class TaTQAEmAndF1(object):
                     self.f.write(str(pred_details["opt_class"])+'\n')
                     self.f.write(str(pred_details["order"])+'\n')
                     self.f.write('-----------------------------------------------\n')
-                '''
+                
                 #if gold_op[2] == "Stop" :
                 #    print(prediction_strings)
                 #    print(ground_truth_answer_strings)
