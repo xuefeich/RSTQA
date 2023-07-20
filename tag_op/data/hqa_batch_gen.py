@@ -88,7 +88,7 @@ class TaTQABatchGen(object):
             gold_answers_batch, paragraph_tokens_batch, table_cell_tokens_batch, paragraph_numbers_batch,\
             table_cell_numbers_batch, question_ids_batch,  ari_ops_batch ,opt_labels_batch , ari_labels_batch,\
             opt_mask_batch,order_labels_batch , selected_indexes_batch ,question_mask_batch ,question_index_batch,question_numbers_batch,question_tokens_batch\
-            is_counter_batch= zip(*batch)
+            ,is_counter_batch= zip(*batch)
            
 
             bsz = len(batch)
@@ -106,7 +106,7 @@ class TaTQABatchGen(object):
             is_counter = torch.LongTensor(bsz)
             scale_labels = torch.LongTensor(bsz)
             ari_labels = torch.LongTensor([])
-            selected_indexes = np.zeros([1,21])
+            selected_indexes = np.zeros([1,11])
             opt_mask = torch.LongTensor(bsz)
             ari_ops = torch.LongTensor(bsz,self.num_ops)
             opt_labels = torch.LongTensor(bsz,self.num_ops-1,self.num_ops-1)
@@ -138,14 +138,14 @@ class TaTQABatchGen(object):
                 if selected_indexes_batch[i] != []:
                     ari_labels = torch.cat((ari_labels , ari_labels_batch[i]) , dim = 0)
                     num = selected_indexes_batch[i].shape[0]
-                    sib = np.zeros([num,21])
+                    sib = np.zeros([num,11])
                     for j in range(num):
                         sib[j,0] = i
                         try:
                             sib[j,1:] = selected_indexes_batch[i][j]
                         except:
                             print(selected_indexes_batch[i][j])
-                            sib[j,1:] = selected_indexes_batch[i][j][:20]
+                            sib[j,1:] = selected_indexes_batch[i][j][:10]
                     selected_indexes = np.concatenate((selected_indexes , sib) , axis = 0)
 
                 order_labels[i] = order_labels_batch[i]
