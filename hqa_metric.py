@@ -208,7 +208,7 @@ class TaTQAEmAndF1(object):
         self._total_f1 = 0.0
         self._scale_em = 0.0
         self._op_em = 0.0
-        #self.f = open("pred_wrong.txt",'w')
+        self.f = open("hqa_pred_wrong.txt",'w')
         self._order_em = 0.0
         self._ordern = 0
         self.op_correct_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
