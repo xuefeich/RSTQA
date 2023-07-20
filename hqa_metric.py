@@ -256,7 +256,7 @@ class TaTQAEmAndF1(object):
                     print(gold_op)
                     print(i)
 
-                if order_labels[i] != -100:
+                if order_labels[i] != -100 and pred_order != None:
                     self._ordern += 1
                     if order_labels[i] == pred_order[i]:
                         self._order_em += 1
@@ -303,8 +303,11 @@ class TaTQAEmAndF1(object):
                     self.f.write(str(pred_details["ops"])+'\n')
                     self.f.write(str(pred_details["numbers"])+'\n')
                     self.f.write(str(pred_details["num_labels"])+'\n')
-                    self.f.write(str(pred_details["opt_class"])+'\n')
-                    self.f.write(str(pred_details["order"])+'\n')
+                    try:
+                        self.f.write(str(pred_details["opt_class"])+'\n')
+                        self.f.write(str(pred_details["order"])+'\n')
+                    except:
+                        print("pred details err")
                     self.f.write('-----------------------------------------------\n')
                 
                 #if gold_op[2] == "Stop" :
