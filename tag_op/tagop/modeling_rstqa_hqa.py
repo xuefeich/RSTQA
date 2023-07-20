@@ -773,7 +773,7 @@ class TagopModel(nn.Module):
                           SCALE[int(predicted_scale_class[bsz])], None, None,
                           pred_op=current_ops, gold_op=gold_answers[bsz]["gold_ops"]
                           ,pred_order = pred_order[bsz]
-                          #,pred_details = {"ops":pred_ari_class[bsz],"numbers":selected_numbers_batch[bsz],"num_labels":selected_numbers_labels,"opt_class":pred_opt_class[bsz],"order":pred_order[bsz]}
+                          ,pred_details = {"ops":pred_ari_class[bsz],"numbers":selected_numbers_batch[bsz],"num_labels":selected_numbers_labels,"opt_class":pred_opt_class[bsz],"order":pred_order[bsz]}
                           )
 
         return output_dict
