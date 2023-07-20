@@ -166,6 +166,7 @@ class TagopModel(nn.Module):
         self.ari_criterion = ari_criterion
         self.opt_criterion = opt_criterion
         self.order_criterion = order_criterion
+        self.counter_criterion = counter_criterion
         self.ari_operator_criterion = ari_operator_criterion
         # NLLLoss for tag_prediction
         self.NLLLoss = nn.NLLLoss(reduction="sum")
