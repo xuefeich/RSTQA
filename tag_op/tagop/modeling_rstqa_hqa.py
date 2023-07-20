@@ -583,6 +583,9 @@ class TagopModel(nn.Module):
             pred_opt_class = pred_opt_class.detach().cpu().numpy()
             pred_opd1_opt_scores = pred_opd1_opt_scores.detach().cpu().numpy()
             pred_opd2_opt_scores = pred_opd2_opt_scores.detach().cpu().numpy()
+        else:
+            pred_order = [None] * batch_size
+            pred_opt_class = [None] * batch_size
 
         for bsz in range(batch_size):
             pred_span = []
