@@ -272,7 +272,7 @@ class TagopModel(nn.Module):
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
 
-        question_reduce_mean = torch.mean(question_sequence_output, dim=1)
+        question_reduce_mean = torch.mean(question_output, dim=1)
         counter_prediction = self.if_predictor(question_reduce_mean)
         counter_prediction_loss = self.counter_criterion(counter_prediction, counter_labels)
         paragraph_reduce_mean = torch.mean(paragraph_sequence_output, dim=1)
