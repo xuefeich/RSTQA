@@ -1221,7 +1221,7 @@ class TagTaTQAReader(object):
                     
                     instance = self._to_instance(question, table, paragraphs, answer_from,
                                     answer_type, answer, counter_derivation,  facts,
-                                    counter_answer_mapping, scale,is_counter question_answer["uid"])
+                                    counter_answer_mapping, scale,is_counter, question_answer["uid"])
                     if instance is not None:
                         instances.append(instance)
                 except RuntimeError as e :
