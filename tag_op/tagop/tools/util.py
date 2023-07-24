@@ -59,6 +59,24 @@ class BiFFNLayer(nn.Module):
             inter_act = self.ln(inter_act)
         return self.fc2(inter_act)
 
+class ATTLayer(nn.Module):
+    def __init__(self, intermediate_dim, output_dim, dropout, layer_norm=True):
+        super(ATTLayer, self).__init__()
+        self.fc1 = nn.MultiheadAttention(intermediate_dim,1,batch_first=True)
+        if layer_norm:
+            self.ln = nn.LayerNorm(intermediate_dim)
+        else:
+            self.ln = None
+        self.dropout_func = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(intermediate_dim, output_dim)
+
+    def forward(self, q,k):
+        inter = self.fc1(q,k,k)
+        if self.ln:
+            inter = self.ln(inter)
+        return self.fc2(self.dropout_func(inter))
+
+
 class GCN(nn.Module):
 
     def __init__(self, node_dim, extra_factor_dim=0, iteration_steps=1):
