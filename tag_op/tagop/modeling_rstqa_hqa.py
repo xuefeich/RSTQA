@@ -2,7 +2,7 @@ import torch
 torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
 from hqa_metric import TaTQAEmAndF1
-from .tools.util import FFNLayer
+from .tools.util import FFNLayer,ATTLayer
 from .tools import allennlp as util
 from typing import Dict, List, Tuple
 import numpy as np
@@ -280,8 +280,16 @@ class TagopModel(nn.Module):
         table_reduce_mean = torch.mean(table_sequence_output, dim=1)
         op_output = torch.cat((question_reduce_mean,table_reduce_mean, paragraph_reduce_mean), dim=-1)
         operator_prediction = self.operator_predictor(op_output)
-
         scale_prediction = self.scale_predictor(cls_output)
+
+        opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
+        for bsz in range(batch_size):
+            opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
+        q = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),paragraph_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1)),dim = 1),dim = 1).unsqueeze(1)
+        ari_ops_prediction = self.ari_predictor(q,opt_output)
+        ari_ops_loss = self.ari_operator_criterion(ari_ops_prediction.transpose(1, 2) , ari_ops)
+        
+
         output_dict = {}
         operator_prediction_loss = self.operator_criterion(operator_prediction, operator_labels)
         scale_prediction_loss = self.scale_criterion(scale_prediction, scale_labels)
@@ -293,16 +301,14 @@ class TagopModel(nn.Module):
         paragraph_token_tag_prediction_loss = self.NLLLoss(paragraph_tag_prediction, paragraph_tag_labels.long())
 
 
-        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss + counter_prediction_loss
+        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss + counter_prediction_loss+ari_ops_loss
 
         for bsz in range(batch_size):
             if counter_labels[bsz] == 1:
                 output_dict["loss"] = output_dict["loss"] + self.NLLLoss(question_tag_prediction[bsz], question_tag_labels[bsz].long())
-            for roud in range(self.num_ops):
-                if ari_ops[bsz,roud] != -100:
-                    output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(sequence_output[bsz,opt_mask[bsz]+roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
-
-        opt_output_filled = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
+            # for roud in range(self.num_ops):
+            #     if ari_ops[bsz,roud] != -100:
+            #         output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(sequence_output[bsz,opt_mask[bsz]+roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
 
         num_numbers_truth = ari_labels.shape[0]
 
@@ -314,7 +320,6 @@ class TagopModel(nn.Module):
         if num_numbers_truth >0:
             for bsz in range(batch_size):
                order_numbers.append([])
-               opt_output_filled[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
                for selected_index in selected_indexes:
                    if selected_index[0] == bsz:
                        k = np.where(selected_index[1:] == 0)[0] # [bsz,subtok_index , ....,0]
@@ -329,12 +334,12 @@ class TagopModel(nn.Module):
                            #print(torch.mean(sequence_output_filled[bsz , number_index],dim = 0))
                            #exit(0)
 
-                           selected_numbers_output[num_numbers,roud] = torch.cat((torch.mean(sequence_output[bsz , number_index],dim = 0), opt_output_filled[bsz,roud]),dim = -1)
+                           selected_numbers_output[num_numbers,roud] = torch.cat((torch.mean(sequence_output[bsz , number_index],dim = 0), opt_output[bsz,roud]),dim = -1)
                            if ari_labels[num_numbers,roud] == 1:
                                order_numbers[bsz][roud].append(number_index)
                            
                            #if ari_labels[num_numbers,roud] != -100:
-                           #    output_dict["loss"] = output_dict["loss"] +self.ari_criterion(self.operand_predictor(torch.cat((torch.mean(sequence_output_filled[bsz , number_index],dim = 0), opt_output_filled[bsz,roud]),dim = -1)),ari_labels[num_numbers,roud])
+                           #    output_dict["loss"] = output_dict["loss"] +self.ari_criterion(self.operand_predictor(torch.cat((torch.mean(sequence_output_filled[bsz , number_index],dim = 0), opt_output[bsz,roud]),dim = -1)),ari_labels[num_numbers,roud])
                        num_numbers += 1
 
             operand_prediction = self.operand_predictor(selected_numbers_output)
@@ -348,8 +353,8 @@ class TagopModel(nn.Module):
                   if order_labels[bsz,roud] != -100:
                      opd1_output = torch.mean(sequence_output[bsz , order_numbers[bsz][roud][0]],dim = 0)
                      opd2_output = torch.mean(sequence_output[bsz , order_numbers[bsz][roud][1]],dim = 0)
-                     order_output[bsz,roud] = torch.cat((opd1_output, opt_output_filled[bsz,roud] , opd2_output),dim = -1)
-                     #output_dict["loss"] = output_dict["loss"] + self.order_criterion(self.order_predictor(torch.cat((opd1_output, opt_output_filled[bsz,roud] , opd2_output),dim = -1)),order_labels[bsz,roud])
+                     order_output[bsz,roud] = torch.cat((opd1_output, opt_output[bsz,roud] , opd2_output),dim = -1)
+                     #output_dict["loss"] = output_dict["loss"] + self.order_criterion(self.order_predictor(torch.cat((opd1_output, opt_output[bsz,roud] , opd2_output),dim = -1)),order_labels[bsz,roud])
 
             order_prediction = self.order_predictor(order_output)
             order_loss = self.order_criterion(order_prediction.transpose(1,2),order_labels)
@@ -359,7 +364,7 @@ class TagopModel(nn.Module):
             for j in range(i):
                 if len(torch.nonzero(opt_labels[:,j,i-1] == -100)) < opt_labels.shape[0]:
                     output_dict["loss"] = output_dict["loss"] + self.opt_criterion(
-                            self.opt_predictor(torch.cat((opt_output_filled[:, j, :], opt_output_filled[:, i, :]), dim=-1)),opt_labels[:, j, i - 1])
+                            self.opt_predictor(torch.cat((opt_output[:, j, :], opt_output[:, i, :]), dim=-1)),opt_labels[:, j, i - 1])
 
 
 
