@@ -424,9 +424,6 @@ class TagopModel(nn.Module):
         opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
         for bsz in range(batch_size):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
-        ari_ops_prediction = self.ari_predictor(opt_output)
-        pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
-
 
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_tag_prediction = self.tag_predictor(question_output)
@@ -459,6 +456,9 @@ class TagopModel(nn.Module):
         scale_prediction = self.scale_predictor(cls_output)
         predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
 
+        q = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),paragraph_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1)),dim = 1),dim = 1).unsqueeze(1)
+        ari_ops_prediction = self.ari_predictor(q,opt_output)
+        pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
 
         question_tag_prediction_score = question_tag_prediction[:, :, 1]
         question_token_tag_prediction_score = reduce_max_index(question_tag_prediction_score, question_index).detach().cpu().numpy()
