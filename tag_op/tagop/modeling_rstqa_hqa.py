@@ -456,7 +456,7 @@ class TagopModel(nn.Module):
         scale_prediction = self.scale_predictor(cls_output)
         predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
 
-        q = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),paragraph_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1)),dim = 1),dim = 1).unsqueeze(1)
+        q = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),paragraph_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1)),dim = 1),dim = 1).unsqueeze(1).expand(opt_output.shape)
         ari_ops_prediction = self.ari_predictor(q,opt_output)
         pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
 
