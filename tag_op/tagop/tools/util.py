@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import allennlp as util
+import numpy as np
 
 def gelu(x):
     return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
@@ -76,6 +77,21 @@ class ATTLayer(nn.Module):
             inter = self.ln(inter)
         return self.fc2(self.dropout_func(inter))
 
+
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, max_seq_len, d_model):
+        super(PositionalEncoding, self).__init__()
+
+        position_encoding = np.array([
+            [pos / np.power(10000, 2.0 * (j // 2) / d_model) for j in range(d_model)]
+            for pos in range(max_seq_len+1)])
+        position_encoding[:, 0::2] = np.sin(position_encoding[:, 0::2])
+        position_encoding[:, 1::2] = np.cos(position_encoding[:, 1::2])
+        position_encoding = torch.from_numpy(position_encoding)
+        self.position_encoding = nn.Embedding(max_seq_len + 1, d_model)
+        self.position_encoding.weight = nn.Parameter(position_encoding,
+                                                  requires_grad=True)
 
 class GCN(nn.Module):
 
