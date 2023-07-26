@@ -152,7 +152,7 @@ class TagopModel(nn.Module):
             dropout_prob = self.config.hidden_dropout_prob
         # operator predictor
         self.operator_predictor = FFNLayer(3*hidden_size, hidden_size, operator_classes, dropout_prob)
-        self.ari_predictor = FFNLayer(hidden_size, hidden_size, ari_classes, dropout_prob)
+        self.ari_predictor = ATTLayer(hidden_size, ari_classes, dropout_prob)
         # scale predictor
         self.scale_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
         self.tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
