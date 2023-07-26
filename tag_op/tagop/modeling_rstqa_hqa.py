@@ -285,7 +285,7 @@ class TagopModel(nn.Module):
         opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
         for bsz in range(batch_size):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
-        q = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),paragraph_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1)),dim = 1),dim = 1).unsqueeze(1)
+        q = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),paragraph_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1)),dim = 1),dim = 1).unsqueeze(1).expand(opt_output.shape)
         ari_ops_prediction = self.ari_predictor(q,opt_output)
         ari_ops_loss = self.ari_operator_criterion(ari_ops_prediction.transpose(1, 2) , ari_ops)
         
