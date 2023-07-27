@@ -18,7 +18,6 @@ from .hqa_derivation_split import infix_evaluator
 from .hqa_mapping_split import split_mapping
 if is_scatter_available():
     from torch_scatter import scatter
-
 def convert_start_end_tags(split_tags, paragraph_index):
     in_split_tags = split_tags.copy()
     split_tags = [0 for i in range(len(split_tags))]
@@ -938,8 +937,7 @@ class TagTaTQAReader(object):
                 else:
                     order_labels[i] = -100
         opt_id = torch.nonzero(opt_mask == 1)[0,1]
-        #print(ari_ops)
-        
+        #print(ari_ops)      
         return {
             "input_ids": np.array(input_ids),
             "attention_mask": np.array(attention_mask),
