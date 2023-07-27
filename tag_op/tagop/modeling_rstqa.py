@@ -156,7 +156,7 @@ class TagopModel(nn.Module):
         # scale predictor
         self.scale_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
         self.span_tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
-        self.number_tag_predictor = FFNLayer(2*hidden_size,hidden_size,  2, dropout_prob)
+        #self.number_tag_predictor = FFNLayer(2*hidden_size,hidden_size,  2, dropout_prob)
         #self.number_tag_predictor = BiFFNLayer(hidden_size,hidden_size,hidden_size,  2, dropout_prob)
         self.operand_predictor = FFNLayer(2*hidden_size, hidden_size, 2, dropout_prob)
         #self.operand_predictor = BiFFNLayer(hidden_size,hidden_size, hidden_size, 2, dropout_prob)
@@ -281,7 +281,7 @@ class TagopModel(nn.Module):
         for bsz in range(batch_size):
            if operator_labels[bsz] == 4:
               paragraph_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((paragraph_sequence_output[bsz],paragraph_cls_output[bsz]),dim = -1))
-              paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
+              #paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
            else:
               paragraph_tag_prediction[bsz] = self.span_tag_predictor(paragraph_sequence_output[bsz])
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
