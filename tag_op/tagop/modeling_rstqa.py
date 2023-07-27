@@ -296,6 +296,7 @@ class TagopModel(nn.Module):
 
         scale_prediction = self.scale_predictor(cls_output)
 
+        opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
         for bsz in range(batch_size):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
         ari_ops_prediction = self.ari_predictor(opt_output)
@@ -316,7 +317,7 @@ class TagopModel(nn.Module):
         #         if ari_ops[bsz,roud] != -100:
         #             output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(sequence_output[bsz,opt_mask[bsz]+roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
 
-        opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
+        
         num_numbers_truth = ari_labels.shape[0]
         selected_numbers_output = torch.zeros([num_numbers_truth,self.num_ops,2*self.hidden_size],device = device)
         num_numbers = 0
