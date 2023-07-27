@@ -400,8 +400,10 @@ class TagopModel(nn.Module):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids)
-        sequence_output = outputs[0]
-
+        #sequence_output = outputs[0]
+        position_output = self.PE(input_ids)
+        sequence_output = (outputs[0]+position_output)/2
+        
         cls_output = sequence_output[:, 0, :]
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
@@ -544,18 +546,10 @@ class TagopModel(nn.Module):
 
 
         if num_numbers > 0:
-            #selected_numbers_output = selected_numbers_output[:num_numbers]
             number_indexes_batch = number_indexes_batch[:num_numbers]
-            #selected_numbers_batch = selected_numbers_batch[:num_numbers]
-            #ari_tags_prediction = self.operand_predictor(selected_numbers_output)
-            #_ , ari_tags_scores_order = torch.sort(ari_tags_prediction,dim = 0,descending= True)
-            #opd_ari_order = ari_tags_scores_order[:,:,1].detach().cpu().numpy()
-            #opd2_ari_order = ari_tags_scores_order[:,:,2].detach().cpu().numpy()
-
             pred_ari_tags_class = torch.argmax(operand_prediction[:num_numbers],dim = -1).detach().cpu().numpy()
             pred_order = pred_order.detach().cpu().numpy()
             pred_opt_class = torch.zeros([batch_size,self.num_ops - 1 , self.num_ops - 1],device = device)
-
             pred_opd1_opt_scores = torch.zeros([batch_size,self.num_ops - 1 , self.num_ops - 1],device = device)
             pred_opd2_opt_scores = torch.zeros([batch_size,self.num_ops - 1 , self.num_ops - 1],device = device)
             for i in range(1,self.num_ops):
