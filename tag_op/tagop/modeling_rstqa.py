@@ -2,7 +2,7 @@ import torch
 torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
 from tatqa_metric import TaTQAEmAndF1
-from .tools.util import FFNLayer,BiFFNLayer
+from .tools.util import FFNLayer,BiFFNLayer,PositionalEncoding
 from .tools import allennlp as util
 from typing import Dict, List, Tuple
 import numpy as np
@@ -173,7 +173,7 @@ class TagopModel(nn.Module):
         self.NLLLoss = nn.NLLLoss(reduction="sum")
         # tapas config
         self.config = config
-
+        self.PE = PositionalEncoding(512,hidden_size)
         self.arithmetic_op_index = arithmetic_op_index
 
         self.ARI_CLASSES = ARITHMETIC_CLASSES_
@@ -254,16 +254,15 @@ class TagopModel(nn.Module):
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids)
-        sequence_output = outputs[0]
+        #sequence_output = outputs[0]
+        position_output = self.PE(input_ids)
+        sequence_output = (outputs[0]+position_output)/2
+
         batch_size = sequence_output.shape[0]
-
         cls_output = sequence_output[:, 0, :]
-
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
-
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_reduce_mean = torch.mean(question_output, dim=1)
-
         table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
         table_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
