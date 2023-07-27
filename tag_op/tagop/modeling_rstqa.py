@@ -400,7 +400,7 @@ class TagopModel(nn.Module):
             token_type_ids=token_type_ids,
             position_ids=position_ids)
         #sequence_output = outputs[0]
-        position_output = self.PE(input_ids)
+        position_output = self.PE(input_ids).long()
         sequence_output = (outputs[0]+position_output)/2
         
         cls_output = sequence_output[:, 0, :]
