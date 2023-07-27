@@ -295,6 +295,12 @@ class TagopModel(nn.Module):
         operator_prediction = self.operator_predictor(scale_output)
 
         scale_prediction = self.scale_predictor(cls_output)
+
+        for bsz in range(batch_size):
+            opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
+        ari_ops_prediction = self.ari_predictor(opt_output)
+        ari_ops_loss = self.ari_operator_criterion(ari_ops_prediction.transpose(1, 2),ari_ops)
+        
         output_dict = {}
 
         operator_prediction_loss = self.operator_criterion(operator_prediction, operator_labels)
@@ -303,11 +309,12 @@ class TagopModel(nn.Module):
         table_tag_prediction_loss = self.NLLLoss(table_tag_prediction, table_tag_labels.long())
         paragraph_tag_prediction = paragraph_tag_prediction.transpose(1, 2)
         paragraph_token_tag_prediction_loss = self.NLLLoss(paragraph_tag_prediction, paragraph_tag_labels.long())
-        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss
-        for bsz in range(batch_size):
-            for roud in range(self.num_ops):
-                if ari_ops[bsz,roud] != -100:
-                    output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(sequence_output[bsz,opt_mask[bsz]+roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
+        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss + ari_ops_loss
+
+        # for bsz in range(batch_size):
+        #     for roud in range(self.num_ops):
+        #         if ari_ops[bsz,roud] != -100:
+        #             output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(sequence_output[bsz,opt_mask[bsz]+roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
 
         opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
         num_numbers_truth = ari_labels.shape[0]
@@ -317,7 +324,7 @@ class TagopModel(nn.Module):
         if num_numbers_truth >0:
             for bsz in range(batch_size):
                order_numbers.append([])
-               opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
+               #opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
                for selected_index in selected_indexes:
                    if selected_index[0] == bsz:
                        k = np.where(selected_index[1:] == 0)[0] # [bsz,subtok_index , ....,0]
@@ -327,7 +334,7 @@ class TagopModel(nn.Module):
                            number_index = selected_index[1:k[0]+1]
                        for roud in range(self.num_ops):
                            order_numbers[bsz].append([])
-                           selected_numbers_output[num_numbers,roud] = torch.cat((torch.mean(sequence_output[bsz , number_index],dim = 0), opt_output_filled[bsz,roud]),dim = -1)
+                           selected_numbers_output[num_numbers,roud] = torch.cat((torch.mean(sequence_output[bsz , number_index],dim = 0), opt_output[bsz,roud]),dim = -1)
                            if ari_labels[num_numbers,roud] == 1:
                                order_numbers[bsz][roud].append(number_index)
                        num_numbers += 1
