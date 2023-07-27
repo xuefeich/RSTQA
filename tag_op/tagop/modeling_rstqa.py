@@ -255,9 +255,8 @@ class TagopModel(nn.Module):
             token_type_ids=token_type_ids,
             position_ids=position_ids)
         #sequence_output = outputs[0]
-        position_output = self.PE(input_ids)
+        position_output = self.PE.position_encoding(input_ids).long()
         sequence_output = (outputs[0]+position_output)/2
-
         batch_size = sequence_output.shape[0]
         cls_output = sequence_output[:, 0, :]
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
