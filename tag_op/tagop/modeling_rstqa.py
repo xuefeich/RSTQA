@@ -303,8 +303,8 @@ class TagopModel(nn.Module):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
 
         opt_position = self.PE(opt_output)
-        opt_output = self.attention(torch.mean(torch.cat((question_reduce_mean,table_reduce_mean, paragraph_reduce_mean)
-                                                         , dim=0), dim=0).unsqueeze(1).repeat(1, opt_output.shape[1], 1), opt_output + opt_position)
+        query = torch.cat((question_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1), paragraph_reduce_mean.unsqueeze(1)) , dim=1)
+        opt_output = self.attention(torch.mean(query, dim=1).repeat(1, opt_output.shape[1], 1), opt_output + opt_position)
         ari_ops_prediction = self.ari_predictor(opt_output)
         ari_ops_loss = self.ari_operator_criterion(ari_ops_prediction.transpose(1, 2),ari_ops)
         
