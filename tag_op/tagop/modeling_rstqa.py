@@ -2,7 +2,7 @@ import torch
 torch.autograd.set_detect_anomaly(True)
 import torch.nn as nn
 from tatqa_metric import TaTQAEmAndF1
-from .tools.util import FFNLayer,BiFFNLayer,PositionalEncoding
+from .tools.util import FFNLayer,BiFFNLayer,PositionalEncoding,ATTLayer
 from .tools import allennlp as util
 from typing import Dict, List, Tuple
 import numpy as np
