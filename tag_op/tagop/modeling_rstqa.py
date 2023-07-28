@@ -420,16 +420,6 @@ class TagopModel(nn.Module):
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_reduce_mean = torch.mean(question_output, dim=1)
-        opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
-
-        for bsz in range(batch_size):
-            opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
-
-        opt_position = self.PE(opt_output)
-        opt_output = self.attention(torch.mean(torch.cat((question_reduce_mean,table_reduce_mean, paragraph_reduce_mean)
-                                                         , dim=0), dim=0).unsqueeze(1).repeat(1, opt_output.shape[1], 1), opt_output + opt_position)
-        ari_ops_prediction = self.ari_predictor(opt_output)
-        pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
 
         #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
@@ -467,6 +457,17 @@ class TagopModel(nn.Module):
 
         scale_prediction = self.scale_predictor(cls_output)
         predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
+
+        opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
+
+        for bsz in range(batch_size):
+            opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
+
+        opt_position = self.PE(opt_output)
+        opt_output = self.attention(torch.mean(torch.cat((question_reduce_mean,table_reduce_mean, paragraph_reduce_mean)
+                                                         , dim=0), dim=0).unsqueeze(1).repeat(1, opt_output.shape[1], 1), opt_output + opt_position)
+        ari_ops_prediction = self.ari_predictor(opt_output)
+        pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
 
         #with torch.no_grad():
         paragraph_tag_prediction_score = paragraph_tag_prediction[:, :, 1]
