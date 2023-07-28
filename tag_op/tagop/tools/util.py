@@ -61,37 +61,37 @@ class BiFFNLayer(nn.Module):
         return self.fc2(inter_act)
 
 class ATTLayer(nn.Module):
-    def __init__(self, intermediate_dim, output_dim, dropout, layer_norm=True):
+    def __init__(self, input_dim, output_dim, dropout):
         super(ATTLayer, self).__init__()
-        self.fc1 = nn.MultiheadAttention(intermediate_dim,1,batch_first=True)
-        if layer_norm:
-            self.ln = nn.LayerNorm(intermediate_dim)
-        else:
-            self.ln = None
+        self.fc1 = nn.MultiheadAttention(input_dim,1,batch_first=True)
         self.dropout_func = nn.Dropout(dropout)
-        self.fc2 = nn.Linear(intermediate_dim, output_dim)
+        self.fc2 = nn.Linear(input_dim, output_dim)
 
     def forward(self, q,k):
-        inter = self.fc1(q,k,k)[0]
-        if self.ln:
-            inter = self.ln(inter)
-        return self.fc2(self.dropout_func(inter))
+        inter = self.fc1(q,k,k, dropout=self.dropout_func)[0]
+        return self.fc2(inter)
 
 
-class PositionalEncoding(nn.Module):
+class PositionalEmbedding(nn.Module):
 
-    def __init__(self, max_seq_len, d_model):
-        super(PositionalEncoding, self).__init__()
+    def __init__(self, d_model, max_len=512):
+        super().__init__()
 
-        position_encoding = np.array([
-            [pos / np.power(10000, 2.0 * (j // 2) / d_model) for j in range(d_model)]
-            for pos in range(max_seq_len+1)])
-        position_encoding[:, 0::2] = np.sin(position_encoding[:, 0::2])
-        position_encoding[:, 1::2] = np.cos(position_encoding[:, 1::2])
-        position_encoding = torch.from_numpy(position_encoding)
-        self.position_encoding = nn.Embedding(max_seq_len + 1, d_model)
-        self.position_encoding.weight = nn.Parameter(position_encoding,
-                                                  requires_grad=True)
+        # Compute the positional encodings once in log space.
+        pe = torch.zeros(max_len, d_model).float()
+        pe.require_grad = False
+
+        position = torch.arange(0, max_len).float().unsqueeze(1)
+        div_term = (torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model)).exp()
+
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        return self.pe[:, :x.size(1)]
 
 class GCN(nn.Module):
 
