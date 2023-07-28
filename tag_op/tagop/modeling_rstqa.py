@@ -156,7 +156,7 @@ class TagopModel(nn.Module):
         # scale predictor
         self.scale_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
         self.span_tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
-        self.number_tag_predictor = FFNLayer(2*hidden_size,hidden_size,  2, dropout_prob)
+        #self.number_tag_predictor = FFNLayer(2*hidden_size,hidden_size,  2, dropout_prob)
         #self.number_tag_predictor = BiFFNLayer(hidden_size,hidden_size,hidden_size,  2, dropout_prob)
         self.operand_predictor = FFNLayer(2*hidden_size, hidden_size, 2, dropout_prob)
         #self.operand_predictor = BiFFNLayer(hidden_size,hidden_size, hidden_size, 2, dropout_prob)
@@ -261,28 +261,30 @@ class TagopModel(nn.Module):
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_reduce_mean = torch.mean(question_output, dim=1)
-        table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
+        #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
-        table_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        for bsz in range(batch_size):
-           if operator_labels[bsz] == 4:
-              table_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((table_sequence_output[bsz],table_cls_output[bsz]),dim = -1))
-              #table_tag_prediction[bsz] = self.number_tag_predictor(table_sequence_output[bsz],table_cls_output[bsz])
-           else:
-              table_tag_prediction[bsz] = self.span_tag_predictor(table_sequence_output[bsz])
+        # table_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
+        # for bsz in range(batch_size):
+        #    if operator_labels[bsz] == 4:
+        #       table_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((table_sequence_output[bsz],table_cls_output[bsz]),dim = -1))
+        #       #table_tag_prediction[bsz] = self.number_tag_predictor(table_sequence_output[bsz],table_cls_output[bsz])
+        #    else:
+        #       table_tag_prediction[bsz] = self.span_tag_predictor(table_sequence_output[bsz])
+        table_tag_prediction = self.span_tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
 
         paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        for bsz in range(batch_size):
-           if operator_labels[bsz] == 4:
-              paragraph_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((paragraph_sequence_output[bsz],paragraph_cls_output[bsz]),dim = -1))
-              paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
-           else:
-              paragraph_tag_prediction[bsz] = self.span_tag_predictor(paragraph_sequence_output[bsz])
+        # paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
+        # paragraph_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
+        # for bsz in range(batch_size):
+        #    if operator_labels[bsz] == 4:
+        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((paragraph_sequence_output[bsz],paragraph_cls_output[bsz]),dim = -1))
+        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
+        #    else:
+        #       paragraph_tag_prediction[bsz] = self.span_tag_predictor(paragraph_sequence_output[bsz])
+        paragraph_tag_prediction = self.span_tag_predictor(paragraph_sequence_output)
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
@@ -425,28 +427,30 @@ class TagopModel(nn.Module):
         ari_ops_prediction = self.ari_predictor(opt_output)
         pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
 
-        table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
+        #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
-        table_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        for bsz in range(batch_size):
-           if operator_labels[bsz] == 4:
-              table_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((table_sequence_output[bsz],table_cls_output[bsz]),dim = -1))
-              #table_tag_prediction[bsz] = self.number_tag_predictor(table_sequence_output[bsz],table_cls_output[bsz])
-           else:
-              table_tag_prediction[bsz] = self.span_tag_predictor(table_sequence_output[bsz])
+        # table_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
+        # for bsz in range(batch_size):
+        #    if operator_labels[bsz] == 4:
+        #       table_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((table_sequence_output[bsz],table_cls_output[bsz]),dim = -1))
+        #       #table_tag_prediction[bsz] = self.number_tag_predictor(table_sequence_output[bsz],table_cls_output[bsz])
+        #    else:
+        #       table_tag_prediction[bsz] = self.span_tag_predictor(table_sequence_output[bsz])
+        table_tag_prediction = self.span_tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
 
         paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
-        paragraph_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        for bsz in range(batch_size):
-           if operator_labels[bsz] == 4:
-              paragraph_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((paragraph_sequence_output[bsz],paragraph_cls_output[bsz]),dim = -1))
-              paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
-           else:
-              paragraph_tag_prediction[bsz] = self.span_tag_predictor(paragraph_sequence_output[bsz])
+        # paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
+        # paragraph_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
+        # for bsz in range(batch_size):
+        #    if operator_labels[bsz] == 4:
+        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((paragraph_sequence_output[bsz],paragraph_cls_output[bsz]),dim = -1))
+        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
+        #    else:
+        #       paragraph_tag_prediction[bsz] = self.span_tag_predictor(paragraph_sequence_output[bsz])
+        paragraph_tag_prediction = self.span_tag_predictor(paragraph_sequence_output)
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
