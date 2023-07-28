@@ -93,6 +93,26 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return self.pe[:, :x.size(1)]
 
+
+# class PositionalEncoding(nn.Module):
+
+#     def __init__(self, d_model , max_seq_len):
+#         super(PositionalEncoding, self).__init__()
+#         position_encoding = np.array([
+#             [pos / np.power(10000, 2.0 * (j // 2) / d_model) for j in range(d_model)]
+#             for pos in range(max_seq_len+1)])
+#         position_encoding[:, 0::2] = np.sin(position_encoding[:, 0::2])
+#         position_encoding[:, 1::2] = np.cos(position_encoding[:, 1::2])
+#         position_encoding = torch.from_numpy(position_encoding)
+#         self.position_encoding = nn.Embedding(max_seq_len + 1, d_model)
+#         self.position_encoding.weight = nn.Parameter(position_encoding,
+#                                                   requires_grad=False)
+#         def forward(self,x):
+#             return self.position_encoding(x)
+
+
+
+
 class GCN(nn.Module):
 
     def __init__(self, node_dim, extra_factor_dim=0, iteration_steps=1):
