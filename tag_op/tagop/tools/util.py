@@ -72,7 +72,7 @@ class ATTLayer(nn.Module):
         return self.fc2(inter)
 
 
-class PositionalEmbedding(nn.Module):
+class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model, max_len=512):
         super().__init__()
