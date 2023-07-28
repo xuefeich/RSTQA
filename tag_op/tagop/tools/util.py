@@ -68,7 +68,7 @@ class ATTLayer(nn.Module):
         self.fc2 = nn.Linear(input_dim, output_dim)
 
     def forward(self, q,k):
-        inter = self.fc1(q,k,k, dropout=self.dropout_func)[0]
+        inter = self.dropout_func(self.fc1(q,k,k)[0])
         return self.fc2(inter)
 
 
