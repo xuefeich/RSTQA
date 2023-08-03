@@ -53,7 +53,7 @@ for dm in data_mode:
     dpath = os.path.join(args.input_path, data_format.format(dm))
 
     if dm == "dev":
-        data,maxround_data = data_reader._read(dpath)
+        data,round1_data,round2_data,round3_data,round4_data,round5_data,round6_data = data_reader._read(dpath)
     else:
         data = data_reader._read(dpath)
     print(data_reader.skip_count)
