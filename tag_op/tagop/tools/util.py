@@ -63,13 +63,17 @@ class BiFFNLayer(nn.Module):
 class ATTLayer(nn.Module):
     def __init__(self, input_dim, output_dim, dropout):
         super(ATTLayer, self).__init__()
-        self.fc1 = nn.MultiheadAttention(input_dim,1,batch_first=True)
-        self.dropout_func = nn.Dropout(dropout)
+        self.attention = nn.MultiheadAttention(input_dim,1,batch_first=True)
+        self.fc1 = nn.Linear(input_dim*2 , input_dim)
+        #self.dropout_func = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(input_dim)
         self.fc2 = nn.Linear(input_dim, output_dim)
 
-    def forward(self, q,k):
-        inter = self.dropout_func(self.fc1(q,k,k)[0])
-        return self.fc2(inter)
+    def forward(self, q):
+        q = self.fc1(q)
+        inter,_ = self.attention(q,q,q)
+        inter = self.layer_norm(inter)
+        return self.fc2(inter+q)
 
 
 class PositionalEncoding(nn.Module):
