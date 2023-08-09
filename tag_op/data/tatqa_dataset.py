@@ -942,7 +942,14 @@ class TagTaTQAReader(object):
                     elif int(paragraph_index[0,ni[0]]) != 0:
                         print(paragraph_number_value[int(paragraph_index[0,ni[0]]) - 1])
                     else:
-                        print("extract err")
+                        print("extract err")#if question_answer["uid"] in ignore_ids:
+                       #   print("ignore sample")
+                       #   ignore_instances.append(instance)
+                       #elif derivation.count('+')+derivation.count('-')+derivation.count('*')+derivation.count('/') == 1:
+                       #elif instance["answer_dict"]["gold_ops"][1] == "Stop" and instance["answer_dict"]["gold_ops"][0] in ["Sum","Difference","Multiplication","Division"]:
+                       #   simple_instances.append(instance)
+                       #else:
+                       #   instances.append(instance)
 
             ari_sel_labels = ari_labels[0,:,distinct_si].transpose(0,1)
             if ari_sel_labels.shape[0] != len(number_indexes):
@@ -1495,6 +1502,18 @@ class TagTaTQATestReader(object):
                 #if instance is not None and "ignore" not in instance["answer_dict"]["gold_ops"][:3] and "Stop" not in instance["answer_dict"]["gold_ops"][:3]:
                 if instance is not None:
                     instances.append(instance)
+                    #if answer_type == "arithmetic":
+                       #if question_answer["uid"] in ignore_ids:
+                         #   print("ignore sample")
+                         #   ignore_instances.append(instance)
+                       # elif derivation.count('+')+derivation.count('-')+derivation.count('*')+derivation.count('/') == 1:
+                       # elif instance["answer_dict"]["gold_ops"][1] == "Stop" and instance["answer_dict"]["gold_ops"][0] in ["Sum","Difference","Multiplication","Division"]:
+                        #   simple_instances.append(instance)
+                        #else:
+                        #   instances.append(instance)
+
+
+                    
                     #if "Stop" not in instance["answer_dict"]["gold_ops"] and "ignore" not in instance["answer_dict"]["gold_ops"]:
                     if self.mode == "dev"and instance["answer_dict"]["gold_ops"][3] == "Stop":
                        maxround_instances.append(instance)
