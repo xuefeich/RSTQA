@@ -173,7 +173,6 @@ class TagopModel(nn.Module):
         self.NLLLoss = nn.NLLLoss(reduction="sum")
         # tapas config
         self.config = config
-        self.PE = PositionalEncoding(512,hidden_size)
         self.attention = ATTLayer(hidden_size, hidden_size, dropout_prob)
         self.arithmetic_op_index = arithmetic_op_index
 
@@ -261,29 +260,13 @@ class TagopModel(nn.Module):
         #cls_output_mask = sequence_output[:, 0:1, :].expand(batch_size,sequence_output.shape[1],self.hidden_size)
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_reduce_mean = torch.mean(question_output, dim=1)
-        #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
-        # table_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        # for bsz in range(batch_size):
-        #    if operator_labels[bsz] == 4:
-        #       table_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((table_sequence_output[bsz],table_cls_output[bsz]),dim = -1))
-        #       #table_tag_prediction[bsz] = self.number_tag_predictor(table_sequence_output[bsz],table_cls_output[bsz])
-        #    else:
-        #       table_tag_prediction[bsz] = self.span_tag_predictor(table_sequence_output[bsz])
         table_tag_prediction = self.span_tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
 
         paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
-        # paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
-        # paragraph_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        # for bsz in range(batch_size):
-        #    if operator_labels[bsz] == 4:
-        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((paragraph_sequence_output[bsz],paragraph_cls_output[bsz]),dim = -1))
-        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
-        #    else:
-        #       paragraph_tag_prediction[bsz] = self.span_tag_predictor(paragraph_sequence_output[bsz])
         paragraph_tag_prediction = self.span_tag_predictor(paragraph_sequence_output)
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
@@ -302,11 +285,9 @@ class TagopModel(nn.Module):
         for bsz in range(batch_size):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
 
-        opt_position = self.PE(opt_output)
-        query = torch.cat((question_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1), paragraph_reduce_mean.unsqueeze(1)) , dim=1)
-        opt_output = self.attention(torch.mean(query, dim=1).repeat(1, opt_output.shape[1], 1), opt_output + opt_position)
-        ari_ops_prediction = self.ari_predictor(opt_output)
-        ari_ops_loss = self.ari_operator_criterion(ari_ops_prediction.transpose(1, 2),ari_ops)
+
+        query = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1), paragraph_reduce_mean.unsqueeze(1)) , dim=1),dim = 1).unsqueeze(1).expand(batch_size,self.num_ops,self.hidden_size)
+        opt_output = self.attention(torch.cat((opt_output,query),dim = -1))
         
         output_dict = {}
 
@@ -316,12 +297,11 @@ class TagopModel(nn.Module):
         table_tag_prediction_loss = self.NLLLoss(table_tag_prediction, table_tag_labels.long())
         paragraph_tag_prediction = paragraph_tag_prediction.transpose(1, 2)
         paragraph_token_tag_prediction_loss = self.NLLLoss(paragraph_tag_prediction, paragraph_tag_labels.long())
-        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss + ari_ops_loss
-
-        # for bsz in range(batch_size):
-        #     for roud in range(self.num_ops):
-        #         if ari_ops[bsz,roud] != -100:
-        #             output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(sequence_output[bsz,opt_mask[bsz]+roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
+        output_dict["loss"] = operator_prediction_loss + scale_prediction_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss
+        for bsz in range(batch_size):
+            for roud in range(self.num_ops):
+                if ari_ops[bsz,roud] != -100:
+                    output_dict["loss"] = output_dict["loss"] + self.ari_operator_criterion(self.ari_predictor(opt_output[bsz,roud]).unsqueeze(0) , ari_ops[bsz,roud].unsqueeze(0))
 
         num_numbers_truth = ari_labels.shape[0]
         selected_numbers_output = torch.zeros([num_numbers_truth,self.num_ops,2*self.hidden_size],device = device)
@@ -421,29 +401,13 @@ class TagopModel(nn.Module):
         question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
         question_reduce_mean = torch.mean(question_output, dim=1)
 
-        #table_cls_output = util.replace_masked_values(cls_output_mask, table_mask.unsqueeze(-1), 0)
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
-        # table_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        # for bsz in range(batch_size):
-        #    if operator_labels[bsz] == 4:
-        #       table_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((table_sequence_output[bsz],table_cls_output[bsz]),dim = -1))
-        #       #table_tag_prediction[bsz] = self.number_tag_predictor(table_sequence_output[bsz],table_cls_output[bsz])
-        #    else:
-        #       table_tag_prediction[bsz] = self.span_tag_predictor(table_sequence_output[bsz])
         table_tag_prediction = self.span_tag_predictor(table_sequence_output)
         table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
         table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
         table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
 
         paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
-        # paragraph_cls_output = util.replace_masked_values(cls_output_mask, paragraph_mask.unsqueeze(-1), 0)
-        # paragraph_tag_prediction = torch.zeros([batch_size,sequence_output.shape[1],2],device = device)
-        # for bsz in range(batch_size):
-        #    if operator_labels[bsz] == 4:
-        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(torch.cat((paragraph_sequence_output[bsz],paragraph_cls_output[bsz]),dim = -1))
-        #       paragraph_tag_prediction[bsz] = self.number_tag_predictor(paragraph_sequence_output[bsz],paragraph_cls_output[bsz])
-        #    else:
-        #       paragraph_tag_prediction[bsz] = self.span_tag_predictor(paragraph_sequence_output[bsz])
         paragraph_tag_prediction = self.span_tag_predictor(paragraph_sequence_output)
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
@@ -463,13 +427,11 @@ class TagopModel(nn.Module):
         for bsz in range(batch_size):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
 
-        opt_position = self.PE(opt_output)
-        opt_output = self.attention(torch.mean(torch.cat((question_reduce_mean,table_reduce_mean, paragraph_reduce_mean)
-                                                         , dim=0), dim=0).unsqueeze(1).repeat(1, opt_output.shape[1], 1), opt_output + opt_position)
+        query = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1), paragraph_reduce_mean.unsqueeze(1)) , dim=1),dim = 1).unsqueeze(1).expand(batch_size,self.num_ops,self.hidden_size)
+        opt_output = self.attention(torch.cat((opt_output,query),dim = -1))
+        
         ari_ops_prediction = self.ari_predictor(opt_output)
         pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
-
-        #with torch.no_grad():
         paragraph_tag_prediction_score = paragraph_tag_prediction[:, :, 1]
         paragraph_token_tag_prediction_score = reduce_max_index(paragraph_tag_prediction_score, paragraph_index).detach().cpu().numpy()
         paragraph_tag_prediction_argmax = torch.argmax(paragraph_tag_prediction, dim=-1).float()
@@ -478,7 +440,6 @@ class TagopModel(nn.Module):
         table_cell_tag_prediction_score = reduce_max_index(table_tag_prediction_score, table_cell_index).detach().cpu().numpy()
         table_tag_prediction_argmax = torch.argmax(table_tag_prediction, dim=-1).float()
         table_cell_tag_prediction = reduce_mean_index(table_tag_prediction_argmax, table_cell_index).detach().cpu().numpy()
-
         selected_numbers_output = torch.zeros([200 , self.num_ops, 2*self.hidden_size],device = device)
         number_indexes_batch = np.zeros([200 , 2])
         selected_numbers_batch = []
