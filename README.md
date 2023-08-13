@@ -1,5 +1,5 @@
-pip install allennlp --no-dependencies\n
-pip install spacy\n
+pip install allennlp --no-dependencies
+pip install spacy
 pip install pandas
 pip install datasets
 pip install transformers
