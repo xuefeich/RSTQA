@@ -532,6 +532,9 @@ class TagopModel(nn.Module):
             pred_span = []
             selected_numbers_labels = []
             current_ops = ["ignore"]* self.num_ops
+            selected_numbers = []
+            pred_operands = {}
+            
             if "SPAN-TEXT" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["SPAN-TEXT"]:
                 paragraph_selected_span_tokens = get_single_span_tokens_from_paragraph(
                       paragraph_token_tag_prediction[bsz],
@@ -596,6 +599,12 @@ class TagopModel(nn.Module):
                                     current_ops[roud] = "Stop"
                                 break
                             roud_selected_numbers = [selected_numbers[i] for i in range(len(selected_numbers)) if selected_numbers_labels[i][roud] != 0]
+                            for rnum in roud_selected_numbers:
+                                if rnum not in pred_operands:
+                                    pred_operands[rnum] = [roud]
+                                else:
+                                    pred_operands[rnum].append(roud)
+                            
                             if roud > 0 :
                                 opt_selected_indexes = pred_opt_class[bsz,:,roud-1]
                                 opt_selected_numbers = [temp_ans[i] for i in range(roud) if opt_selected_indexes[i] != 0]
@@ -710,15 +719,19 @@ class TagopModel(nn.Module):
             output_dict["question_id"].append(question_ids[bsz])
             output_dict["gold_answers"].append(gold_answers[bsz])
 
-            #print(current_ops)
-            #print(gold_answers[bsz]["gold_ops"])
-            #print("---------------------------------------------")
-
+            if question_ids[bsz] in["4d259081-6da6-44bd-8830-e4de0031744c","22e20f25-669a-46b9-8779-2768ba391955","94ef7822-a201-493e-b557-a640f4ea4d83"]:
+                print(question_ids[bsz])
+                print(current_ops)
+                print(pred_operands)
+                print(pred_opt_class[bsz])
+                print(pred_order[bsz])
+                print("-----------------------------------------------")
+            
             self._metrics({**gold_answers[bsz], "uid": question_ids[bsz],"derivation":derivation[bsz]}, answer,
                           SCALE[int(predicted_scale_class[bsz])], None, None,
                           pred_op=current_ops, gold_op=gold_answers[bsz]["gold_ops"]
                           ,pred_order = pred_order[bsz]
-                          #,pred_details = {"ops":pred_ari_class[bsz],"numbers":selected_numbers_batch[bsz],"num_labels":selected_numbers_labels,"opt_class":pred_opt_class[bsz],"order":pred_order[bsz]}
+                          ,pred_details = {"pred_numbers":selected_numbers_batch[bsz],"pred_operands":pred_operands}
                           )
 
         return output_dict
