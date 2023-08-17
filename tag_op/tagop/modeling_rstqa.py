@@ -186,41 +186,12 @@ class TagopModel(nn.Module):
         else:
             self.OPERATOR_CLASSES = get_op_3(op_mode)
         self._metrics = TaTQAEmAndF1()
-        '''
-        self.text_matched_numbers = 0
-        self.table_matched_numbers = 0
-        self.mix_matched_numbers = 0
-        self.text_numbers = 0
-        self.table_numbers = 0
-        self.mix_numbers = 0
-        '''
-
-    """
-    :parameter
-    input_ids, shape:[bsz, 512] split_tokens' ids, 0 for padded token.
-    attention_mask, shape:[bsz, 512] 0 for padded token and 1 for others
-    token_type_ids, shape[bsz, 512, 3].
-    # row_ids and column_ids are non-zero for table-contents and 0 for others, including headers.
-        segment_ids[:, :, 0]: 1 for table and 0 for others
-        column_ids[:, :, 1]: indicate to which column of the table a token belongs (starting from 1). Is 0 for all question
-      tokens, special tokens and padding.
-        row_ids[:, :, 2]: indicate to which row of the table a token belongs (starting from 1). Is 0 for all question tokens,
-      special tokens and padding. Tokens of column headers are also 0.
-    paragraph_mask, shape[bsz, 512] 1 for paragraph_tokens and 0 for others
-    paragraph_index, shape[bsz, 512] 0 for non-paragraph tokens and index starting from 1 for paragraph tokens
-    tag_labels: [bsz, 512] 1 for tokens in the answer and 0 for others
-    operator_labels: [bsz, 8]
-    scale_labels: [bsz, 8]
-    number_order_labels: [bsz, 2]
-    paragraph_tokens: [bsz, text_len], white-space split tokens
-    tables: [bsz,] raw tables in DataFrame.
-    paragraph_numbers: [bsz, text_len], corresponding number extracted from tokens, nan for non-number token
-    table_numbers: [bsz, table_size], corresponding number extracted from table cells, nan for non-number cell. Shape is the same as flattened table.
-    """
 
     def forward(self,
                 input_ids: torch.LongTensor,
                 attention_mask: torch.LongTensor,
+                opd_ids: torch.LongTensor,
+                opd_mask: torch.LongTensor,
                 token_type_ids: torch.LongTensor,
                 paragraph_mask: torch.LongTensor,
                 paragraph_index: torch.LongTensor,
