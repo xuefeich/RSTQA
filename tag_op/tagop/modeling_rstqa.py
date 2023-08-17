@@ -690,13 +690,13 @@ class TagopModel(nn.Module):
             output_dict["question_id"].append(question_ids[bsz])
             output_dict["gold_answers"].append(gold_answers[bsz])
 
-            if question_ids[bsz] in["4d259081-6da6-44bd-8830-e4de0031744c","22e20f25-669a-46b9-8779-2768ba391955","94ef7822-a201-493e-b557-a640f4ea4d83"]:
-                print(question_ids[bsz])
-                print(current_ops)
-                print(pred_operands)
-                print(pred_opt_class[bsz])
-                print(pred_order[bsz])
-                print("-----------------------------------------------")
+            # if question_ids[bsz] in["4d259081-6da6-44bd-8830-e4de0031744c","22e20f25-669a-46b9-8779-2768ba391955","94ef7822-a201-493e-b557-a640f4ea4d83"]:
+            #     print(question_ids[bsz])
+            #     print(current_ops)
+            #     print(pred_operands)
+            #     print(pred_opt_class[bsz])
+            #     print(pred_order[bsz])
+            #     print("-----------------------------------------------")
             
             self._metrics({**gold_answers[bsz], "uid": question_ids[bsz],"derivation":derivation[bsz]}, answer,
                           SCALE[int(predicted_scale_class[bsz])], None, None,
