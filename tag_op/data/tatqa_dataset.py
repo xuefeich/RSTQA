@@ -48,7 +48,7 @@ def convert_start_end_tags(split_tags, paragraph_index):
     return split_tags
 
 def is_whitespace(c):
-    if c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F:
+    if c == " " or c == "\t" or c == "\r" or c == "\n" or (len(c)==1 and ord(c) == 0x202F):
         return True
     return False
 
