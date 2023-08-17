@@ -16,7 +16,6 @@ from .data_util import *
 from .data_util import  _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, _is_times
 from .derivation_split import infix_evaluator
 from .mapping_split import split_mapping
-# soft dependency
 if is_scatter_available():
     from torch_scatter import scatter
 
@@ -236,32 +235,6 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
     table_cell_number_value = []
     table_mapping = False
     answer_coordinates = None
-
-    '''
-    if mapping == None:
-        current_cell_index = 1
-        for i in range(len(table)):
-            for j in range(len(table[i])):
-               cell_ids = string_tokenizer(table[i][j], tokenizer)
-               if not cell_ids:
-                 continue
-               table_ids += cell_ids
-               if is_number(table[i][j]):
-                  table_cell_number_value.append(to_number(table[i][j]))
-               else:
-                  table_cell_number_value.append(np.nan)
-               table_cell_tokens.append(table[i][j])
-               if table_mapping:
-                  if [i, j] in answer_coordinates:
-                      mapping_content.append(table[i][j])
-                      table_tags += [1 for _ in range(len(cell_ids))]
-                  else:
-                      table_tags += [0 for _ in range(len(cell_ids))]
-               else:
-                  table_tags += [0 for _ in range(len(cell_ids))]
-               table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
-               current_cell_index += 1
-    '''
 
     if mapping and "table" in mapping and len(mapping["table"]) != 0:
         table_mapping = True
@@ -696,25 +669,6 @@ def combine_tags(tags1,tags2):
     whole_tags = torch.zeros([1, 512])
     whole_tags[0] = com_tags
     return whole_tags
-"""
-instance format:
-input_ids: np.array[1, 512]. The input ids.
-attention_mask: np.array[1, 512]. The attention_mask to denote whether a id is real or padded.
-token_type_ids: np.array[1, 512, 3]. 
-    The special tokens needed by tapas within following orders: segment_ids, column_ids, row_ids.
-tags_label: np.array[1, 512]. The tag ground truth indicate whether this id is part of the answer.
-paragraph_mask: np.array[1, 512]. 1 for ids belongs to paragraph, 0 for others
-paragraph_word_piece_mask: np.array[1, 512]. 0 for sub-token, 1 for non-sub-token or the start of sub-token
-paragraph_number_value: np.array[1, 512]. nan for no-numerical words and number for numerical words extract from current word. i.e.: $460 -> 460
-table_number_value: np.array[1, max_num_columns*max_num_rows]. Definition is the same as above.
-paragraph_number_mask: np.array[1, 512]. 0 for non numerical token and 1 for numerical token.
-table_number_mask: np.array[1, max_num_columns*max_num_rows]. 0 for non numerical token and 1 for numerical token.
-paragraph_index: np.array[1, 512], used to apply token-lv reduce-mean after getting sequence_output
-number_order_label: int. The operator calculating order.
-operator_label:  int. The operator ground truth.
-scale_label: int. The scale ground truth.
-answer: str. The answer used to calculate metrics.
-"""
 
 
 
@@ -747,7 +701,8 @@ class TagTaTQAReader(object):
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
                         tags_ground_truth, operator_ground_truth, scale_ground_truth,paragraph_tokens, 
-                        table_cell_tokens, answer_dict, question_id, ari_ops,opt_mask,opt_index,opt_labels,ari_labels,order_labels,question_mask):
+                        table_cell_tokens, answer_dict, question_id, ari_ops,opt_mask,opt_index,opt_labels,
+                       ari_labels,order_labels,question_mask,opd_ids,opd_mask):
 
         if ari_ops != None:
             ari_ops_padding = self.num_ops - len(ari_ops)
@@ -858,6 +813,8 @@ class TagTaTQAReader(object):
         return {
             "input_ids": np.array(input_ids),
             "attention_mask": np.array(attention_mask),
+            "opd_ids":np.array(opd_ids),
+            "opd_mask":np.array(opd_mask),
             "token_type_ids": np.array(token_type_ids),
             "paragraph_mask": np.array(paragraph_mask),
             "table_mask": np.array(table_mask),
@@ -874,16 +831,11 @@ class TagTaTQAReader(object):
             "answer_dict": answer_dict,
             "question_id": question_id,
             "ari_ops" : torch.LongTensor(ari_ops),
-            #"opt_mask":np.array(torch.nonzero(opt_mask == 1),
-            #"opt_index":opt_indexes,
             "opt_mask" : opt_id,
             "order_labels" : torch.LongTensor(order_labels),
-            #"opt_index":torch.LongTensor(np.array(opt_index)),
             "ari_labels" : torch.LongTensor(np.array(ari_sel_labels)),
             "selected_indexes" : np.array(number_indexes),
-            #"opd_two_tags" : torch.LongTensor(np.array(opd_two_tags)),
             "opt_labels": torch.LongTensor(np.array(opt_labels)),
-            #"neg_opt_labels": torch.LongTensor(np.array(neg_opt_labels)),
         }
 
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
@@ -1071,7 +1023,8 @@ class TagTaTQAReader(object):
         answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                     paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, operator_class, scale_class,
-                    paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,ari_round_labels,order_labels,question_mask)
+                    paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,
+                    ari_round_labels,order_labels,question_mask,opd_ids,opd_mask)
 
 
     def _read(self, file_path: str):
