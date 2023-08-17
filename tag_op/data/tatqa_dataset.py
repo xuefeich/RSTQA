@@ -491,96 +491,6 @@ def paragraph_test_tokenize(question, paragraphs, tokenizer, mapping, answer_typ
 def question_tokenizer(question_text, tokenizer):
     return string_tokenizer(question_text, tokenizer)
 
-def get_number_order_labels(paragraphs, table, derivation, operator_class, answer_mapping, question_id, OPERATOR_CLASSES):
-    if ("DIVIDE" not in OPERATOR_CLASSES or operator_class != OPERATOR_CLASSES["DIVIDE"]) and \
-            ("CHANGE_RATIO" not in OPERATOR_CLASSES or operator_class != OPERATOR_CLASSES["CHANGE_RATIO"]) and \
-            ("DIFF" not in OPERATOR_CLASSES or operator_class != OPERATOR_CLASSES["DIFF"]):
-        return -1
-    paragraphs_copy = paragraphs.copy()
-    paragraphs = {}
-    for paragraph in paragraphs_copy:
-        paragraphs[paragraph["order"]] = paragraph["text"]
-    del paragraphs_copy
-    operands = get_operands(derivation)
-    first_operand, second_operand = operands[0], operands[1]
-    answer_from = answer_mapping.keys()
-    table_answer_coordinates = None
-    paragraph_answer_coordinates = None
-    if "table" in answer_from:
-        table_answer_coordinates = answer_mapping["table"]
-    if "paragraph" in answer_from:
-        paragraph_answer_coordinates = answer_mapping["paragraph"]
-    table_answer_nums, paragraph_answer_nums = get_answer_nums(table_answer_coordinates, paragraph_answer_coordinates)
-    if (table_answer_nums + paragraph_answer_nums) < 2:
-        # print("the same number to skip it: derivation")
-        raise RuntimeError(f" skip this the derivation is {derivation} ")
-    if table_answer_nums == 2:
-        answer_coordinates = answer_mapping["table"]
-        answer_coordinates_copy = answer_coordinates.copy()
-        answer_coordinates = [(answer_coordinate[0], answer_coordinate[1]) for answer_coordinate in
-                              answer_coordinates_copy]
-        del answer_coordinates_copy
-        operand_one = to_number(table.iloc[answer_coordinates[0][0], answer_coordinates[0][1]])
-        operand_two = to_number(table.iloc[answer_coordinates[1][0], answer_coordinates[1][1]])
-        if str(operand_one) == str(first_operand):
-            if answer_coordinates[0][0] < answer_coordinates[1][0]:
-                return 0
-            elif answer_coordinates[0][0] == answer_coordinates[1][0] and \
-                    answer_coordinates[0][1] < answer_coordinates[1][1]:
-                return 0
-            else:
-                return 1
-        else:
-            if answer_coordinates[0][0] > answer_coordinates[1][0]:
-                return 1
-            elif answer_coordinates[0][0] == answer_coordinates[1][0] and \
-                    answer_coordinates[0][1] > answer_coordinates[1][1]:
-                return 1
-            else:
-                return 0
-    elif paragraph_answer_nums == 2:
-        paragraph_mapping_orders = list(answer_mapping["paragraph"].keys())
-        if len(paragraph_mapping_orders) == 1:
-            answer_one_order, answer_two_order = (paragraph_mapping_orders[0], paragraph_mapping_orders[0])
-            answer_one_start = answer_mapping["paragraph"][answer_one_order][0][0]
-            answer_one_end = answer_mapping["paragraph"][answer_one_order][0][1]
-            answer_two_start = answer_mapping["paragraph"][answer_two_order][1][0]
-            answer_two_end = answer_mapping["paragraph"][answer_two_order][1][1]
-        else:
-            answer_one_order = paragraph_mapping_orders[0]
-            answer_two_order = paragraph_mapping_orders[1]
-            answer_one_start = answer_mapping["paragraph"][answer_one_order][0][0]
-            answer_one_end = answer_mapping["paragraph"][answer_one_order][0][1]
-            answer_two_start = answer_mapping["paragraph"][answer_two_order][0][0]
-            answer_two_end = answer_mapping["paragraph"][answer_two_order][0][1]
-        operand_one = to_number(paragraphs[int(answer_one_order)][answer_one_start:answer_one_end])
-        operand_two = to_number(paragraphs[int(answer_two_order)][answer_two_start:answer_two_end])
-        if operand_one == first_operand:
-            if answer_one_order < answer_two_order:
-                return 0
-            elif answer_one_order == answer_two_order and answer_one_start < answer_two_start:
-                return 0
-            else:
-                return 1
-        else:
-            if answer_one_order > answer_two_order:
-                return 1
-            elif answer_one_order == answer_two_order and answer_one_start > answer_two_start:
-                return 1
-            else:
-                return 0
-    else:
-        answer_coordinates = answer_mapping["table"]
-        operand_one = to_number(table.iloc[answer_coordinates[0][0], answer_coordinates[0][1]])
-        paragraph_mapping_orders = list(answer_mapping["paragraph"].keys())
-        answer_two_order = paragraph_mapping_orders[0]
-        answer_two_start = answer_mapping["paragraph"][answer_two_order][0][0]
-        answer_two_end = answer_mapping["paragraph"][answer_two_order][0][1]
-        operand_two = to_number(paragraphs[int(answer_two_order)][answer_two_start:answer_two_end])
-        if operand_one == first_operand:
-            return 0
-        else:
-            return 1
 
 def _concat(question_ids,
             table_ids,
@@ -613,10 +523,6 @@ def _concat(question_ids,
     opd_two_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
     ari_round_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
     ari_round_labels = torch.zeros([1,num_ops,input_ids.shape[1]])
-
-    #opt_labels = torch.zeros([1,num_ops,num_ops])
-    #neg_opt_labels = torch.zeros([1,num_ops])
-    #ari_round_tags = []
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
@@ -651,7 +557,6 @@ def _concat(question_ids,
     table_index[0, question_length:question_length + table_length] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
     tags[0, question_length:question_length + table_length] = torch.from_numpy(np.array(table_tags[:table_length]))
-
 
     if paragraph_length > 1:
         paragraph_mask[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = 1
@@ -690,20 +595,7 @@ def _concat(question_ids,
                     p_opd1_tags[j] = 1
                 ari_round_labels[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
 
-             #pos_opt_labels[0,i] = torch.from_numpy(np.array(ari_opt_tags[i]["operand1"][:num_ops]))
-
-             #if 1 in ari_opt_tags[i]["operand2"]:
-             #    ari_opt_tags[i]["operand1"][ari_opt_tags[i]["operand2"].index(1)] = 2
-             #opt_labels[0,i] = torch.from_numpy(np.array(ari_opt_tags[i]["operand1"][:num_ops]))
-
-             #if 1 not in ari_opt_tags[i]["operand2"]:
-             #    neg_opt_labels[0,i] = 0
-             #else:
-             #    neg_opt_labels[0,i] = ari_opt_tags[i]["operand2"].index(1) + 1
-
          else:
-             #opt_labels[0,i] = torch.from_numpy(np.array(ari_opt_tags[i][:num_ops]))
-             #neg_opt_labels[0,i] = 0
              ari_round_tags[0,i, question_length:question_length + table_length] = torch.from_numpy(np.array(ari_table_tags[i][:table_length]))
              ari_round_labels[0,i, question_length:question_length + table_length] = torch.from_numpy(np.array(ari_table_tags[i][:table_length]))
              if paragraph_length > 1:
@@ -713,10 +605,9 @@ def _concat(question_ids,
     del in_table_cell_index
     del in_paragraph_index
 
-    #opt_labels = opt_labels[:,:num_ops-1 , 1:]
-
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask,  table_index, tags, \
             input_segments,opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask
+
 def _test_concat(question_ids,
                 table_ids,
                 table_tags,
@@ -943,13 +834,6 @@ class TagTaTQAReader(object):
                         print(paragraph_number_value[int(paragraph_index[0,ni[0]]) - 1])
                     else:
                         print("extract err")#if question_answer["uid"] in ignore_ids:
-                       #   print("ignore sample")
-                       #   ignore_instances.append(instance)
-                       #elif derivation.count('+')+derivation.count('-')+derivation.count('*')+derivation.count('/') == 1:
-                       #elif instance["answer_dict"]["gold_ops"][1] == "Stop" and instance["answer_dict"]["gold_ops"][0] in ["Sum","Difference","Multiplication","Division"]:
-                       #   simple_instances.append(instance)
-                       #else:
-                       #   instances.append(instance)
 
             ari_sel_labels = ari_labels[0,:,distinct_si].transpose(0,1)
             if ari_sel_labels.shape[0] != len(number_indexes):
@@ -968,15 +852,6 @@ class TagTaTQAReader(object):
                 else:
                     order_labels[i] = -100
 
-                    #opt_labels[0,i:,:] = -100
-                    #opt_labels[0,:,i:] = -100
-                '''  
-                    for k in range(i,self.num_ops - 1):
-                        for n in range(512):
-                            if ari_labels[0,i,n] != -100:
-                                ari_labels[0,i,n] = random.randint(0,1)
-            
-                '''
         opt_id = torch.nonzero(opt_mask == 1)[0,1]
         #print(ari_ops)
         
@@ -1034,11 +909,16 @@ class TagTaTQAReader(object):
             exit(0)
         '''
 
-
         order_labels = np.zeros(self.num_ops)
+        opdtext = answer
+                         
         if answer_type == "arithmetic":
             operator_class = self.OPERATOR_CLASSES["ARITHMETIC"]
             num_facts = facts_to_nums(facts)
+
+            if len(num_facts) > 0:
+                opdtext = ','.join(num_facts)
+            
             isavg = 0
             try:
                if _is_average(num_facts,answer):
@@ -1063,7 +943,8 @@ class TagTaTQAReader(object):
                    operands = [i[1:] for i in ari_operations]
                    ari_tags = {'table':[],'para':[],'operation':[]}
 
-                   for i,opds in enumerate(operands):
+                   opdtext = ','.join([','.join(opds) for opds in operands])
+                   for i,opds in enumerate(operands): 
                        temp_mapping,operand_one_mapping,operand_two_mapping = split_mapping(opds,answer_mapping,table,paragraphs)
                        if temp_mapping == None:
                            operator_class = None
@@ -1144,6 +1025,19 @@ class TagTaTQAReader(object):
 
         question_ids = question_tokenizer(question_text, self.tokenizer)
 
+
+        
+        opd_ids = torch.zeros([1, self.max_pieces])
+        opd_list = question_tokenizer(opdtext, self.tokenizer)
+        opdpad = self.max_pieces - len(opd_list)
+        if opdpad > 0:
+            opd_list +=[0] *opdpad
+        else:
+            opd_list = opd_list[:self.max_pieces]
+        opd_ids[0] = torch.from_numpy(np.array(opd_list))
+        opd_mask = opd_ids != 0
+        
+
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
         table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask = \
             _concat(question_ids, table_ids, table_tags, table_cell_index, 
@@ -1174,8 +1068,6 @@ class TagTaTQAReader(object):
                         for j in range(self.num_ops-1):
                             if opt_tags[j] == 1:
                                 opt_labels[0,j,i-1] = 1
-                #print(opt_labels)
-                #print(torch.nonzero(ari_round_labels == 2))
         answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                     paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, operator_class, scale_class,
@@ -1208,13 +1100,8 @@ class TagTaTQAReader(object):
                     facts = question_answer["facts"]
                     answer_from = question_answer["answer_from"]
                     scale = question_answer["scale"]
-                    #instance = self._to_instance(question, table, paragraphs, answer_from,
-                    #                answer_type, answer, derivation, facts, answer_mapping, scale, question_answer["uid"])
-                    #if instance is not None:
-                    #    instances.append(instance)
                 except RuntimeError as e :
                     print(f"run time error:{e}" )
-                    # print(question_answer["uid"])
                 except KeyError:
                     key_error_count += 1
                     # print(question_answer["uid"])
