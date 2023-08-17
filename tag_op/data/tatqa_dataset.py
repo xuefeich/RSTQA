@@ -779,6 +779,7 @@ class TagTaTQAReader(object):
                 if  p > 0:
                     number_indexes[i] += [0] * p
                 else:
+                    number_indexes[i] = number_indexes[i][:10]
                     print("long number")
                     print(ni)
                     print(table_cell_index[0,ni])
@@ -869,7 +870,8 @@ class TagTaTQAReader(object):
             num_facts = facts_to_nums(facts)
 
             if len(num_facts) > 0:
-                opdtext = ','.join(num_facts)
+                nftexts = [str(nf) for nf in num_facts]
+                opdtext = ','.join(nftexts)
             
             isavg = 0
             try:
@@ -895,7 +897,8 @@ class TagTaTQAReader(object):
                    operands = [i[1:] for i in ari_operations]
                    ari_tags = {'table':[],'para':[],'operation':[]}
 
-                   opdtext = ','.join([','.join(opds) for opds in operands])
+                   nftexts = [[str(opd) for opd in opds] for opds in operands]
+                   opdtext = ','.join([','.join(opds) for opds in nftexts])
                    for i,opds in enumerate(operands): 
                        temp_mapping,operand_one_mapping,operand_two_mapping = split_mapping(opds,answer_mapping,table,paragraphs)
                        if temp_mapping == None:
