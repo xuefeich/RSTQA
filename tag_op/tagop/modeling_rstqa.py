@@ -300,7 +300,7 @@ class TagopModel(nn.Module):
                   if order_labels[bsz,roud] != -100:
                      opd1_output = torch.mean(sequence_output[bsz , order_numbers[bsz][roud][0]],dim = 0)
                      opd2_output = torch.mean(sequence_output[bsz , order_numbers[bsz][roud][1]],dim = 0)
-                     order_output[bsz,roud] = torch.cat((opd1_output, opt_output_filled[bsz,roud] , opd2_output),dim = -1)
+                     order_output[bsz,roud] = torch.cat((opd1_output, opt_output[bsz,roud] , opd2_output),dim = -1)
 
             order_prediction = self.order_predictor(order_output)
             order_loss = self.order_criterion(order_prediction.transpose(1,2),order_labels)
@@ -310,7 +310,7 @@ class TagopModel(nn.Module):
             for j in range(i):
                 if len(torch.nonzero(opt_labels[:,j,i-1] == -100)) < opt_labels.shape[0]:
                     output_dict["loss"] = output_dict["loss"] + self.opt_criterion(
-                            self.opt_predictor(torch.cat((opt_output_filled[:, j, :], opt_output_filled[:, i, :]), dim=-1)),opt_labels[:, j, i - 1])
+                            self.opt_predictor(torch.cat((opt_output[:, j, :], opt_output[:, i, :]), dim=-1)),opt_labels[:, j, i - 1])
 
         with torch.no_grad():
             predicted_scale_class = torch.argmax(scale_prediction, dim=-1).detach().cpu().numpy()
