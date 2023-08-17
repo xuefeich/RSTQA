@@ -897,7 +897,7 @@ class TagTaTQAReader(object):
                    operands = [i[1:] for i in ari_operations]
                    ari_tags = {'table':[],'para':[],'operation':[]}
 
-                   nftexts = [[str(opd) for opd in opds] for opds in operands]
+                   nftexts = [[str(opd) for opd in opds if isinstance(opd,str) == False] for opds in operands]
                    opdtext = ','.join([','.join(opds) for opds in nftexts])
                    for i,opds in enumerate(operands): 
                        temp_mapping,operand_one_mapping,operand_two_mapping = split_mapping(opds,answer_mapping,table,paragraphs)
