@@ -53,7 +53,8 @@ for dm in data_mode:
     dpath = os.path.join(args.input_path, data_format.format(dm))
 
     if dm == "dev":
-        data,round1_data,round2_data,round3_data,round4_data,round5_data,round6_data = data_reader._read(dpath)
+        #data,round1_data,round2_data,round3_data,round4_data,round5_data,round6_data = data_reader._read(dpath)
+        data,mdata = data_reader._read(dpath)
     else:
         data = data_reader._read(dpath)
     print(data_reader.skip_count)
@@ -65,29 +66,29 @@ for dm in data_mode:
         os.makedirs(args.output_dir)
     with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}.pkl"), "wb") as f:
         pickle.dump(data, f)
-    if dm == "dev":
-        print(len(round1_data))
-        print(len(round2_data))
-        print(len(round3_data))
-        print(len(round4_data))
-        print(len(round5_data))
-        print(len(round6_data))
-        with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_1round.pkl"), "wb") as fmax:
-            pickle.dump(round1_data, fmax)
-            fmax.close()
-        with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_2round.pkl"), "wb") as fmax:
-            pickle.dump(round2_data, fmax)
-            fmax.close()
-        with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_3round.pkl"), "wb") as fmax:
-            pickle.dump(round3_data, fmax)
-            fmax.close()
-        with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_4round.pkl"), "wb") as fmax:
-            pickle.dump(round4_data, fmax)
-            fmax.close()
-        with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_5round.pkl"), "wb") as fmax:
-            pickle.dump(round5_data, fmax)
-            fmax.close()
-        with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_6round.pkl"), "wb") as fmax:
-            pickle.dump(round6_data, fmax)
-            fmax.close()
+    # if dm == "dev":
+    #     print(len(round1_data))
+    #     print(len(round2_data))
+    #     print(len(round3_data))
+    #     print(len(round4_data))
+    #     print(len(round5_data))
+    #     print(len(round6_data))
+    #     with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_1round.pkl"), "wb") as fmax:
+    #         pickle.dump(round1_data, fmax)
+    #         fmax.close()
+    #     with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_2round.pkl"), "wb") as fmax:
+    #         pickle.dump(round2_data, fmax)
+    #         fmax.close()
+    #     with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_3round.pkl"), "wb") as fmax:
+    #         pickle.dump(round3_data, fmax)
+    #         fmax.close()
+    #     with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_4round.pkl"), "wb") as fmax:
+    #         pickle.dump(round4_data, fmax)
+    #         fmax.close()
+    #     with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_5round.pkl"), "wb") as fmax:
+    #         pickle.dump(round5_data, fmax)
+    #         fmax.close()
+    #     with open(os.path.join(args.output_dir, f"tagop_{args.encoder}_cached_{dm}_6round.pkl"), "wb") as fmax:
+    #         pickle.dump(round6_data, fmax)
+    #         fmax.close()
                         
