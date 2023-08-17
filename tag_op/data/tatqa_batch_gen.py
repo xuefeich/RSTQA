@@ -143,7 +143,7 @@ class TaTQABatchGen(object):
                 operator_labels[i] = operator_labels_batch[i]
 
                 ari_ops[i] = torch.LongTensor(ari_ops_batch[i])
-                if selected_indexes_batch[i] != []:
+                if len(selected_indexes_batch[i]) != 0:
                     ari_labels = torch.cat((ari_labels , ari_labels_batch[i]) , dim = 0)
                     num = selected_indexes_batch[i].shape[0]
                     sib = np.zeros([num,11])
