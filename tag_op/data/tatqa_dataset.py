@@ -980,17 +980,16 @@ class TagTaTQAReader(object):
 
         question_ids = question_tokenizer(question_text, self.tokenizer)
 
-
         
-        opd_ids = torch.zeros([1, self.max_pieces])
-        opd_list = question_tokenizer(opdtext, self.tokenizer)
-        opdpad = self.max_pieces - len(opd_list)
-        if opdpad > 0:
-            opd_list +=[0] *opdpad
-        else:
-            opd_list = opd_list[:self.max_pieces]
-        opd_ids[0] = torch.from_numpy(np.array(opd_list))
-        opd_mask = opd_ids != 0
+        # opd_ids = torch.zeros([1, self.max_pieces])
+        # opd_list = question_tokenizer(opdtext, self.tokenizer)
+        # opdpad = self.max_pieces - len(opd_list)
+        # if opdpad > 0:
+        #     opd_list +=[0] *opdpad
+        # else:
+        #     opd_list = opd_list[:self.max_pieces]
+        # opd_ids[0] = torch.from_numpy(np.array(opd_list))
+        # opd_mask = opd_ids != 0
         
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
@@ -1001,6 +1000,17 @@ class TagTaTQAReader(object):
                     self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags)
 
 
+        opd_ids = torch.zeros([1, self.max_pieces])
+        opdtext =  ' '.join([str(i) for i in tags[0]])
+        opd_list = question_tokenizer(opdtext, self.tokenizer)
+        opdpad = self.max_pieces - len(opd_list)
+        if opdpad > 0:
+            opd_list +=[0] *opdpad
+        else:
+            opd_list = opd_list[:self.max_pieces]
+        opd_ids[0] = torch.from_numpy(np.array(opd_list))
+        opd_mask = opd_ids != 0
+        
         opt_labels = torch.zeros(1,self.num_ops - 1 , self.num_ops-1)
         #whole_tags = combine_tags(ari_round_tags,opd_two_tags)
         if answer_type == "arithmetic":
