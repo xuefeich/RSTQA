@@ -579,7 +579,7 @@ def _concat(question_ids,
     del in_paragraph_index
 
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask,  table_index, tags, \
-            input_segments,opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask
+            input_segments,opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask,question_length,question_length + table_length + paragraph_length
 
 def _test_concat(question_ids,
                 table_ids,
@@ -993,7 +993,7 @@ class TagTaTQAReader(object):
         
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
-        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask = \
+        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask,ql,qtpl = \
             _concat(question_ids, table_ids, table_tags, table_cell_index, 
                     paragraph_ids, paragraph_tags, paragraph_index,
                     self.sep,self.opt,self.question_length_limit,
@@ -1009,7 +1009,8 @@ class TagTaTQAReader(object):
         else:
             opd_list = opd_list[:self.max_pieces]
         opd_ids[0] = torch.from_numpy(np.array(opd_list))
-        opd_mask = opd_ids != 0
+        opd_mask = torch.zeros([1, self.max_pieces])
+        opd_mask[0,ql :qtpl] = 1
         
         opt_labels = torch.zeros(1,self.num_ops - 1 , self.num_ops-1)
         #whole_tags = combine_tags(ari_round_tags,opd_two_tags)
