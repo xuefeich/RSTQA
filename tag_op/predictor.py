@@ -72,11 +72,12 @@ def main():
         arithmetic_op_index = get_arithmetic_op_index_3(args.op_mode)
 
 
-    with open("ari_operator_ids.json",'r',encoding='utf-8') as fr:
-        ari_operator_ids = json.load(fr)
-        fr.close()
-    #print(bert_model.config)
-    bert_model.resize_token_embeddings(bert_model.config.vocab_size+len(ari_operator_ids)+1)
+    # with open("ari_operator_ids.json",'r',encoding='utf-8') as fr:
+    #     ari_operator_ids = json.load(fr)
+    #     fr.close()
+    # print(bert_model.config)
+    # bert_model.resize_token_embeddings(bert_model.config.vocab_size+len(ari_operator_ids)+1)
+    bert_model.resize_token_embeddings(bert_model.config.vocab_size+1)
     network = TagopModel(
         encoder = bert_model,
         config = bert_model.config,
