@@ -493,8 +493,6 @@ def _concat(question_ids,
     opt_mask = torch.zeros_like(input_ids)
     opt_index = torch.zeros_like(input_ids)
     tags = torch.zeros_like(input_ids)
-    opd_two_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
-    ari_round_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
     ari_round_labels = torch.zeros([1,num_ops,input_ids.shape[1]])
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
@@ -504,46 +502,47 @@ def _concat(question_ids,
     question_mask[0,1:question_length-1] = 1
     table_length = len(table_ids)
     paragraph_length = len(paragraph_ids)
+
+
     if passage_length_limitation is not None:
         if len(table_ids) > passage_length_limitation:
             passage_ids = table_ids[:passage_length_limitation]
             table_length = passage_length_limitation
             paragraph_length = 0
-        elif len(table_ids) + len(paragraph_ids) > passage_length_limitation:
-            passage_ids = table_ids + [sep] + paragraph_ids
-            passage_ids = passage_ids[:passage_length_limitation]
+        elif len(table_ids) + len(paragraph_ids)+1 > passage_length_limitation:
             table_length = len(table_ids)
-            paragraph_length = passage_length_limitation - table_length
+            paragraph_length = passage_length_limitation - table_length - 1
+            paragraph_ids = paragraph_ids[:paragraph_length]
+            passage_ids = paragraph_ids + [sep] + table_ids
         else:
-            passage_ids = table_ids + [sep] + paragraph_ids
+            passage_ids = paragraph_ids + [sep] + table_ids
             table_length = len(table_ids)
-            paragraph_length = len(paragraph_ids) + 1
+            paragraph_length = len(paragraph_ids)
     else:
-        passage_ids = table_ids + [sep] + paragraph_ids
+        passage_ids = paragraph_ids + [sep] + table_ids
 
     passage_ids = passage_ids + [sep] + num_ops * [opt] + [sep]
 
     input_ids[0, :question_length] = torch.from_numpy(np.array(question_ids))
     input_ids[0, question_length:question_length + len(passage_ids)] = torch.from_numpy(np.array(passage_ids))
     attention_mask = input_ids != 0
-    table_mask[0, question_length:question_length + table_length] = 1
-    table_index[0, question_length:question_length + table_length] = \
+    table_mask[0, question_length+ paragraph_length + 1:question_length + table_length + paragraph_length + 1] = 1
+    table_index[0, question_length + paragraph_length + 1:question_length + table_length + paragraph_length +1 ] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
-    tags[0, question_length:question_length + table_length] = torch.from_numpy(np.array(table_tags[:table_length]))
+    tags[0, question_length+ paragraph_length +1 :question_length + table_length + paragraph_length +1] = torch.from_numpy(np.array(table_tags[:table_length]))
 
-    if paragraph_length > 1:
-        paragraph_mask[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = 1
-        paragraph_index[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
-            torch.from_numpy(np.array(in_paragraph_index[:paragraph_length - 1]))
-        tags[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
-            torch.from_numpy(np.array(paragraph_tags[:paragraph_length - 1]))
+    if paragraph_length > 0:
+        paragraph_mask[0, question_length:question_length + paragraph_length] = 1
+        paragraph_index[0, question_length:question_length +  paragraph_length] = \
+            torch.from_numpy(np.array(in_paragraph_index[:paragraph_length]))
+        tags[0, question_length:question_length + paragraph_length] = \
+            torch.from_numpy(np.array(paragraph_tags[:paragraph_length]))
+    
 
-    opt_mask[0,question_length + table_length + paragraph_length + 1 : question_length + table_length + paragraph_length + num_ops+1] = 1
-    #opt_index[0,question_length + table_length + paragraph_length + 1:question_length + table_length + paragraph_length + num_ops+1] = torch.from_numpy(np.array([1,2,3,4,5,6]))
+    opt_mask[0,question_length + table_length + paragraph_length + 2 : question_length + table_length + paragraph_length + num_ops+2] = 1
     if ari_tags != None:
       ari_table_tags = ari_tags["table"]
       ari_para_tags = ari_tags["para"]
-      #ari_opt_tags = ari_tags["operation"]
       for i in range(num_ops):
          r_num_ops = len(ari_table_tags)
          if i >= r_num_ops:
@@ -552,34 +551,27 @@ def _concat(question_ids,
 
              opd1_tags = np.array(ari_table_tags[i]["operand1"][:table_length])
              opd2_tags = np.array(ari_table_tags[i]["operand2"][:table_length])
-             #ari_round_tags[0,i,question_length:question_length + table_length] = torch.from_numpy(opd1_tags)
-             opd_two_tags[0,i,question_length:question_length + table_length] = torch.from_numpy(opd2_tags)
              for j in np.where(opd2_tags == 1):
                  opd1_tags[j] = 1
-             ari_round_labels[0,i,question_length:question_length + table_length] = torch.from_numpy(opd1_tags)
-
+             ari_round_labels[0,i,question_length+ paragraph_length + 1 :question_length + table_length+ paragraph_length + 1 ] = torch.from_numpy(opd1_tags)
 
              if paragraph_length > 1:
-                p_opd1_tags = np.array(ari_para_tags[i]["operand1"][:paragraph_length-1])
-                p_opd2_tags = np.array(ari_para_tags[i]["operand2"][:paragraph_length-1])
-                #ari_round_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
-                opd_two_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd2_tags)
+                p_opd1_tags = np.array(ari_para_tags[i]["operand1"][:paragraph_length])
+                p_opd2_tags = np.array(ari_para_tags[i]["operand2"][:paragraph_length])
                 for j in np.where(p_opd2_tags == 1):
                     p_opd1_tags[j] = 1
-                ari_round_labels[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
+                ari_round_labels[0,i, question_length :question_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
 
          else:
-             ari_round_tags[0,i, question_length:question_length + table_length] = torch.from_numpy(np.array(ari_table_tags[i][:table_length]))
-             ari_round_labels[0,i, question_length:question_length + table_length] = torch.from_numpy(np.array(ari_table_tags[i][:table_length]))
+             ari_round_labels[0,i, question_length+ paragraph_length + 1:question_length + table_length+ paragraph_length + 1] = torch.from_numpy(np.array(ari_table_tags[i][:table_length]))
              if paragraph_length > 1:
-                ari_round_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(np.array(ari_para_tags[i][:paragraph_length-1]))
-                ari_round_labels[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(np.array(ari_para_tags[i][:paragraph_length-1]))
+                ari_round_labels[0,i, question_length:question_length + paragraph_length] = torch.from_numpy(np.array(ari_para_tags[i][:paragraph_length]))
 
     del in_table_cell_index
     del in_paragraph_index
 
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask,  table_index, tags, \
-            input_segments,opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask,question_length,question_length + table_length + paragraph_length
+            input_segments,opt_mask,opt_index,ari_round_labels,question_mask,question_length,question_length + table_length + paragraph_length
 
 def _test_concat(question_ids,
                 table_ids,
@@ -623,37 +615,37 @@ def _test_concat(question_ids,
             passage_ids = table_ids[:passage_length_limitation]
             table_length = passage_length_limitation
             paragraph_length = 0
-        elif len(table_ids) + len(paragraph_ids) > passage_length_limitation:
-            passage_ids = table_ids + [sep] + paragraph_ids
-            passage_ids = passage_ids[:passage_length_limitation]
+        elif len(table_ids) + len(paragraph_ids)+1 > passage_length_limitation:
             table_length = len(table_ids)
-            paragraph_length = passage_length_limitation - table_length
+            paragraph_length = passage_length_limitation - table_length - 1
+            paragraph_ids = paragraph_ids[:paragraph_length]
+            passage_ids = paragraph_ids + [sep] + table_ids
         else:
-            passage_ids = table_ids + [sep] + paragraph_ids
+            passage_ids = paragraph_ids + [sep] + table_ids
             table_length = len(table_ids)
-            paragraph_length = len(paragraph_ids) + 1
+            paragraph_length = len(paragraph_ids)
     else:
-        passage_ids = table_ids + [sep] + paragraph_ids
+        passage_ids = paragraph_ids + [sep] + table_ids
 
     passage_ids = passage_ids + [sep] + num_ops * [opt] + [sep]
 
     input_ids[0, :question_length] = torch.from_numpy(np.array(question_ids))
     input_ids[0, question_length:question_length + len(passage_ids)] = torch.from_numpy(np.array(passage_ids))
     attention_mask = input_ids != 0
-    table_mask[0, question_length:question_length + table_length] = 1
-    table_index[0, question_length:question_length + table_length] = \
+    table_mask[0, question_length+ paragraph_length + 1:question_length + table_length + paragraph_length + 1] = 1
+    table_index[0, question_length + paragraph_length + 1:question_length + table_length + paragraph_length +1 ] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
-    tags[0, question_length:question_length + table_length] = torch.from_numpy(np.array(table_tags[:table_length]))
-    if paragraph_length > 1:
-        paragraph_mask[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = 1
-        paragraph_index[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
-            torch.from_numpy(np.array(in_paragraph_index[:paragraph_length - 1]))
-        tags[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
-            torch.from_numpy(np.array(paragraph_tags[:paragraph_length - 1]))
+    tags[0, question_length+ paragraph_length +1 :question_length + table_length + paragraph_length +1] = torch.from_numpy(np.array(table_tags[:table_length]))
+
+    if paragraph_length > 0:
+        paragraph_mask[0, question_length:question_length + paragraph_length] = 1
+        paragraph_index[0, question_length:question_length +  paragraph_length] = \
+            torch.from_numpy(np.array(in_paragraph_index[:paragraph_length]))
+        tags[0, question_length:question_length + paragraph_length] = \
+            torch.from_numpy(np.array(paragraph_tags[:paragraph_length]))
 
 
-    opt_mask[0,question_length + table_length + paragraph_length + 1 : question_length + table_length + paragraph_length + num_ops+1] = 1
-    #opt_index[0,question_length + table_length + paragraph_length + 1:question_length + table_length + paragraph_length + num_ops+1] = torch.from_numpy(np.array([1,2,3,4,5,6]))
+    opt_mask[0,question_length + table_length + paragraph_length + 2 : question_length + table_length + paragraph_length + num_ops+2] = 1
 
     del in_table_cell_index
     del in_paragraph_index
@@ -993,7 +985,7 @@ class TagTaTQAReader(object):
         
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
-        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask,ql,qtpl = \
+        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_labels,question_mask,ql,qtpl = \
             _concat(question_ids, table_ids, table_tags, table_cell_index, 
                     paragraph_ids, paragraph_tags, paragraph_index,
                     self.sep,self.opt,self.question_length_limit,
@@ -1013,12 +1005,9 @@ class TagTaTQAReader(object):
         opd_mask[0,ql :qtpl] = 1
         
         opt_labels = torch.zeros(1,self.num_ops - 1 , self.num_ops-1)
-        #whole_tags = combine_tags(ari_round_tags,opd_two_tags)
         if answer_type == "arithmetic":
-            #tags = whole_tags
             ari_round_labels = torch.where(tags > 0 ,ari_round_labels,-100)
             if len(ari_ops) >= 2:
-                #print(ari_tags["operation"])
                 for i in range(1 , len(ari_ops)):
                     opt_tags = ari_tags["operation"][i]
                     if isinstance(opt_tags , dict):
