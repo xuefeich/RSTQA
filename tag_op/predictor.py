@@ -12,7 +12,7 @@ from tag_op.data.tatqa_batch_gen import TaTQATestBatchGen
 from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.data.data_util import get_op_1, get_op_2, get_arithmetic_op_index_1, get_arithmetic_op_index_2
 from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
-from transformers import RobertaModel, BertModel
+from transformers import RobertaModel, BertModel,TapasForQuestionAnswering
 from tag_op.tagop.modeling_rstqa import TagopModel
 from tag_op.tagop.model import TagopPredictModel
 
@@ -21,6 +21,7 @@ options.add_data_args(parser)
 options.add_bert_args(parser)
 parser.add_argument("--eval_batch_size", type=int, default=32)
 parser.add_argument("--model_path", type=str, default="checkpoint")
+parser.add_argument("--tapas_path", type=str, default="")
 parser.add_argument("--mode", type=int, default=1)
 parser.add_argument("--op_mode", type=int, default=0)
 parser.add_argument("--ablation_mode", type=int, default=0)
@@ -51,8 +52,8 @@ def main():
 
     if args.encoder == 'roberta':
         bert_model = RobertaModel.from_pretrained(args.roberta_model)
-    elif args.encoder == 'bert':
-        bert_model = BertModel.from_pretrained('bert-large-uncased')
+    elif args.encoder == 'tapas':
+        bert_model = TapasForQuestionAnswering.from_pretrained(args.tapas_path + "/tapas.large")
 
     if args.ablation_mode == 0:
         operators = OPERATOR_CLASSES_
