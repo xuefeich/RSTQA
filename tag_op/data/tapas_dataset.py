@@ -673,7 +673,7 @@ class TagTaTQAReader(object):
         self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer._convert_token_to_id(sep)
-        self.opt = self.tokenizer.encode("[OPT]")[1]
+        self.opt = self.tokenizer._convert_token_to_id("[OPT]")
         self.num_ops = num_ari_ops
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
@@ -1098,7 +1098,7 @@ class TagTaTQATestReader(object):
         self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer._convert_token_to_id(sep)
-        self.opt = self.tokenizer.encode("[OPT]")[1]
+        self.opt = self.tokenizer._convert_token_to_id("[OPT]")
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
         self.op_skip = 0
