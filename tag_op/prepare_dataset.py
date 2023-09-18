@@ -1,10 +1,7 @@
 import os
 import pickle
 import argparse
-from tag_op.data.tatqa_dataset import TagTaTQAReader, TagTaTQATestReader
 from transformers.models.roberta.tokenization_roberta import RobertaTokenizer
-
-from transformers.models.bert import BertTokenizer
 
 import json
 parser = argparse.ArgumentParser()
@@ -20,12 +17,16 @@ parser.add_argument("--num_arithmetic_operators",type=int,default=6)
 args = parser.parse_args()
 
 if args.encoder == 'roberta':
+    from tag_op.data.tatqa_dataset import TagTaTQAReader, TagTaTQATestReader
     tokenizer = RobertaTokenizer.from_pretrained(args.model_path + "/roberta.large")
     sep = '<s>'
     #tokenizer.add_special_tokens({'additional_special_tokens':['<OPT>','<STP>','<SUM>','<DIFF>','<DIVIDE>','<TIMES>','<AVERAGE>']})
     tokenizer.add_special_tokens({'additional_special_tokens':['<OPT>']})
-elif args.encoder == 'bert':
-    tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
+elif args.encoder == 'tapas':
+    from transformers import TapasTokenizer
+    from tag_op.data.tapas_dataset import TagTaTQAReader, TagTaTQATestReader
+    tokenizer = TapasTokenizer.from_pretrained(args.model_path + "/tapas.large")
+    tokenizer.add_special_tokens({'additional_special_tokens':['[OPT]']})
     sep = '[SEP]'
 
 
@@ -46,9 +47,9 @@ with open("ari_operator_ids.json",'w',encoding = 'utf-8') as fr:
     json.dump({"<STP>":tokenizer.encode('<STP>')[1],"<SUM>":tokenizer.encode('<SUM>')[1],"<DIFF>":tokenizer.encode('<DIFF>')[1],"<DIVIDE>":tokenizer.encode('<DIVIDE>')[1],"<TIMES>":tokenizer.encode('<TIMES>')[1],"<AVERAGE>":tokenizer.encode('<AVERAGE>')[1]},fr)
     fr.close()
 '''
-with open("ari_operator_ids.json",'w',encoding = 'utf-8') as fr:
-    json.dump({"<OPT>":tokenizer.encode('<OPT>')[1]},fr)
-    fr.close()
+# with open("ari_operator_ids.json",'w',encoding = 'utf-8') as fr:
+#     json.dump({"<OPT>":tokenizer.encode('<OPT>')[1]},fr)
+#     fr.close()
 for dm in data_mode:
     dpath = os.path.join(args.input_path, data_format.format(dm))
 
