@@ -666,14 +666,14 @@ def combine_tags(tags1,tags2):
 
 class TagTaTQAReader(object):
     def __init__(self, tokenizer,
-                 passage_length_limit: int = None, question_length_limit: int = None, sep="<s>", op_mode:int=8,
+                 passage_length_limit: int = None, question_length_limit: int = None, sep="[SEP]", op_mode:int=8,
                  ablation_mode:int=0,num_ari_ops:int=6):
         self.max_pieces = 512
         self.tokenizer = tokenizer
         self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer._convert_token_to_id(sep)
-        self.opt = self.tokenizer.encode("<OPT>")[1]
+        self.opt = self.tokenizer.encode("[OPT]")[1]
         self.num_ops = num_ari_ops
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
@@ -724,7 +724,6 @@ class TagTaTQAReader(object):
             if ari_ops[1] == 0:
                 opt_labels[0,:,:] = -100
         else:
-            #round_label = self.num_ops - 1
             for i in range(1,self.num_ops-1):
                 for j in range(i):
                     opt_labels[0,i,j] = -100
@@ -1092,14 +1091,14 @@ class TagTaTQAReader(object):
 
 class TagTaTQATestReader(object):
     def __init__(self, tokenizer,
-                 passage_length_limit: int = None, question_length_limit: int = None, sep="<s>",
+                 passage_length_limit: int = None, question_length_limit: int = None, sep="[SEP]",
                  ablation_mode=0, op_mode=0,num_ari_ops=6,mode ="dev"):
         self.max_pieces = 512
         self.tokenizer = tokenizer
         self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer._convert_token_to_id(sep)
-        self.opt = self.tokenizer.encode("<OPT>")[1]
+        self.opt = self.tokenizer.encode("[OPT]")[1]
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
         self.op_skip = 0
