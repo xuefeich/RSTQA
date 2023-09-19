@@ -204,17 +204,52 @@ def table_tokenize(table, tokenizer, mapping, answer_type):
         answer_coordinates = mapping["table"]
 
     current_cell_index = 1
-    for i in range(len(table)):
-        for j in range(len(table[i])):
+
+    colnum = len(table)
+    rownum = len(table[0])
+
+    token_type_ids = []
+
+    table_number_mat = np.zeros(colnum,rownum)
+    table_number_mat_sorted = np.zeros(colnum,rownum - 1)
+    getnan = [False] * colnum
+    
+    for i in range(colnum):
+        for j in range(rownum):
+            if is_number(table[i][j]):
+                table_number_mat[i,j] = to_number(table[i][j])
+            else:
+                if j > 0 :
+                   getnan[i] = True
+                table_number_mat[i,j] = np.nan
+        if not getnan[i]:
+            col_number_sorted = table_number_mat[i][1:].copy()
+            col_number_sorted.sorted(axis = 0)
+            table_number_mat_sorted[i] = col_number_sorted
+ 
+    for j in range(rownum):
+        for i in range(colnum):
             cell_ids = string_tokenizer(table[i][j], tokenizer)
             if not cell_ids:
                 continue
             table_ids += cell_ids
-            if is_number(table[i][j]):
-                table_cell_number_value.append(to_number(table[i][j]))
-            else:
-                table_cell_number_value.append(np.nan)
+            
+            col_id = i + 1
+            row_id = j
+            table_cell_number_value.append(table_number_mat[i,j])
             table_cell_tokens.append(table[i][j])
+            if j > 0:
+                if not getnan[i]:
+                    rank_base = int(np.nonzero(table_number_mat_sorted[i] == table_number_mat[i,j])[0][0])
+                    num_rank = rank_base + 1
+                    inv_rank = rownum - 1 - rank_base
+                else:
+                    num_rank = 0
+                    inv_rank = 0
+            else:
+                num_rank = 0
+                inv_rank = 0
+            
             if table_mapping:
                 if [i, j] in answer_coordinates:
                     table_tags += [1 for _ in range(len(cell_ids))]
