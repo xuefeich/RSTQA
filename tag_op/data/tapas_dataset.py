@@ -248,7 +248,7 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
  
     for j in range(rownum):
         for i in range(colnum):
-            cell_ids = string_tokenizer(table[i][j], tokenizer)
+            cell_ids = string_tokenizer(table[i][j], tokenizer)[0]
             if not cell_ids:
                 continue
             table_ids += cell_ids
@@ -326,7 +326,7 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
     
     for j in range(rownum):
         for i in range(colnum):
-            cell_ids = string_tokenizer(table[i][j], tokenizer)
+            cell_ids = string_tokenizer(table[i][j], tokenizer)[0]
             if not cell_ids:
                 continue
             table_ids += cell_ids
