@@ -1020,10 +1020,10 @@ class TagTaTQAReader(object):
                                   elif operand_one_mapping["paragraph"][opd1_pid][0][0] > operand_two_mapping["paragraph"][opd2_pid][0][0]:
                                       order_labels[i] = 1
 
-                              _,_,op1_table_tags,_,_ = table_tokenize(table,self.tokenizer,operand_one_mapping,answer_type)
+                              _,_,op1_table_tags,_,_,_ = table_tokenize(table,self.tokenizer,operand_one_mapping,answer_type)
 
                               _,_,op1_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_one_mapping, answer_type)
-                              _,_,op2_table_tags,_,_ = table_tokenize(table,self.tokenizer,operand_two_mapping,answer_type)
+                              _,_,op2_table_tags,_,_,_ = table_tokenize(table,self.tokenizer,operand_two_mapping,answer_type)
                               _,_,op2_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_two_mapping, answer_type)
                               ari_tags['table'].append({"operand1":op1_table_tags,"operand2":op2_table_tags})
                               ari_tags['para'].append({"operand1":op1_para_tags,"operand2":op2_para_tags})
@@ -1038,7 +1038,7 @@ class TagTaTQAReader(object):
                               ari_tags['operation'].append({"operand1":op1_tags,"operand2":op2_tags})
 
                            else:
-                              _,_,temp_table_tags,_,_ = table_tokenize(table,self.tokenizer,temp_mapping,answer_type)
+                              _,_,temp_table_tags,_,_,_ = table_tokenize(table,self.tokenizer,temp_mapping,answer_type)
                               _,_,temp_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, temp_mapping, answer_type)
                               ari_tags['table'].append(temp_table_tags)
                               ari_tags['para'].append(temp_para_tags)
@@ -1380,7 +1380,7 @@ class TagTaTQATestReader(object):
                 gold_ops = ["ignore"] *self.num_ops
         '''
 
-        table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
+        table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,table_type_ids = \
             table_test_tokenize(table, self.tokenizer, answer_mapping, answer_type,question_numbers)
 
         paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
