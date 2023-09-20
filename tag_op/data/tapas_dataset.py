@@ -273,7 +273,7 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
             else:
                 num_rank = 0
                 inv_rank = 0
-            token_type_ids.append([1,col_id,row_id,0,num_rank,inv_rank,relation_set_index])
+            token_type_ids += [1,col_id,row_id,0,num_rank,inv_rank,relation_set_index] * len(cell_ids[0])
             if table_mapping:
                 if [i, j] in answer_coordinates:
                     table_tags += [1 for _ in range(len(cell_ids[0]))]
@@ -351,7 +351,7 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
             else:
                 num_rank = 0
                 inv_rank = 0
-            token_type_ids.append([1,col_id,row_id,0,num_rank,inv_rank,relation_set_index])
+            token_type_ids += [1,col_id,row_id,0,num_rank,inv_rank,relation_set_index] * len(cell_ids[0])
             if table_mapping:
                 if [i, j] in answer_coordinates:
                     table_tags += [1 for _ in range(len(cell_ids[0]))]
