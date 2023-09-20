@@ -1099,7 +1099,7 @@ class TagTaTQAReader(object):
 
         opd_ids = torch.zeros([1, self.max_pieces])
         opdtext =  ' '.join([str(i) for i in tags[0]])
-        opd_list = question_tokenizer(opdtext, self.tokenizer)
+        opd_list = question_tokenizer(opdtext, self.tokenizer)[0]
         opdpad = self.max_pieces - len(opd_list)
         if opdpad > 0:
             opd_list +=[0] *opdpad
@@ -1390,7 +1390,7 @@ class TagTaTQATestReader(object):
             gold_ops,truth_numbers,order_labels = self.summerize_op(derivation, answer_type, facts, answer, answer_mapping, scale,table_cell_number_value,paragraph_number_value)
             if gold_ops is None:
                 gold_ops = ["ignore"] *self.num_ops
-        question_ids = question_tokenizer(question_text, self.tokenizer)
+        question_ids = question_tokenizer(question_text, self.tokenizer)[0]
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
         table_mask, table_index, tags, token_type_ids ,opt_mask,opt_index , question_mask= \
