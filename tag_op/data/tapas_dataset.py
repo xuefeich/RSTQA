@@ -163,6 +163,7 @@ def string_tokenizer(string: str, tokenizer) -> List[int]:
     if not string:
         return []
     tokens = []
+    number_value = []
     prev_is_whitespace = True
     for i, c in enumerate(string):
         if is_whitespace(c):  # or c in ["-", "–", "~"]:
@@ -184,13 +185,16 @@ def string_tokenizer(string: str, tokenizer) -> List[int]:
         else:
             sub_tokens = tokenizer._tokenize(token)
 
+        number = to_number(token)
+        if number is not None:
+            number_value.append(float(number))
         for sub_token in sub_tokens:
             split_tokens.append(sub_token)
 
     ids = tokenizer.convert_tokens_to_ids(split_tokens)
-    return ids
+    return ids,number_value
 
-def table_tokenize(table, tokenizer, mapping, answer_type):
+def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
     table_cell_tokens = []
     table_ids = []
     table_tags = []
@@ -236,6 +240,7 @@ def table_tokenize(table, tokenizer, mapping, answer_type):
             
             col_id = i + 1
             row_id = j
+            relation_set_index = 0
             table_cell_number_value.append(table_number_mat[i,j])
             table_cell_tokens.append(table[i][j])
             if j > 0:
@@ -243,13 +248,17 @@ def table_tokenize(table, tokenizer, mapping, answer_type):
                     rank_base = int(np.nonzero(table_number_mat_sorted[i] == table_number_mat[i,j])[0][0])
                     num_rank = rank_base + 1
                     inv_rank = rownum - 1 - rank_base
+                    for value in question_numbers:
+                        relation_value = get_numeric_relation(value,table_number_mat[i,j])
+                        assert relation_value >= Relation.EQ.value
+                        relation_set_index += 2 ** (relation_value - Relation.EQ.value)
                 else:
                     num_rank = 0
                     inv_rank = 0
             else:
                 num_rank = 0
                 inv_rank = 0
-            
+            token_type_ids.append([1,col_id,row_id,0,num_rank,inv_rank,relation_set_index])
             if table_mapping:
                 if [i, j] in answer_coordinates:
                     table_tags += [1 for _ in range(len(cell_ids))]
@@ -259,7 +268,7 @@ def table_tokenize(table, tokenizer, mapping, answer_type):
                 table_tags += [0 for _ in range(len(cell_ids))]
             table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
             current_cell_index += 1
-    return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index
+    return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,token_type_ids
 
 def table_test_tokenize(table, tokenizer, mapping, answer_type):
     mapping_content = []
@@ -868,8 +877,9 @@ class TagTaTQAReader(object):
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
                      answer_type: str, answer:str, derivation: str, facts:list,  answer_mapping: Dict, scale: str, question_id:str):
         question_text = question.strip()
+        question_ids,question_numbers = question_tokenizer(question_text, self.tokenizer)
         table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
-                            table_tokenize(table, self.tokenizer, answer_mapping, answer_type)
+                            table_tokenize(table, self.tokenizer, answer_mapping, answer_type,question_numbers)
         paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
                 paragraph_number_value, paragraph_index= \
             paragraph_tokenize(question, paragraphs, self.tokenizer, answer_mapping, answer_type)
@@ -1003,8 +1013,6 @@ class TagTaTQAReader(object):
         for column_name in table.columns.values.tolist():
             column_relation[column_name] = str(column_name)
         table.rename(columns=column_relation, inplace=True)
-
-        question_ids = question_tokenizer(question_text, self.tokenizer)
 
         
         # opd_ids = torch.zeros([1, self.max_pieces])
