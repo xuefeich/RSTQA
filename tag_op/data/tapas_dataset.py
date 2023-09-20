@@ -19,6 +19,12 @@ from .mapping_split import split_mapping
 if is_scatter_available():
     from torch_scatter import scatter
 
+
+class Relation():
+    EQ = 7  # Annotation value is same as cell value
+    LT = 8  # Annotation value is less than cell value
+    GT = 9
+
 def convert_start_end_tags(split_tags, paragraph_index):
     in_split_tags = split_tags.copy()
     split_tags = [0 for i in range(len(split_tags))]
@@ -194,6 +200,15 @@ def string_tokenizer(string: str, tokenizer) -> List[int]:
     ids = tokenizer.convert_tokens_to_ids(split_tokens)
     return ids,number_value
 
+
+def get_numeric_relation(value, other_value):
+    if value == other_value:
+        return Relation.EQ
+    if value < other_value:
+        return Relation.LT
+    if value > other_value:
+        return Relation.GT
+
 def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
     table_cell_tokens = []
     table_ids = []
@@ -250,8 +265,8 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
                     inv_rank = rownum - 1 - rank_base
                     for value in question_numbers:
                         relation_value = get_numeric_relation(value,table_number_mat[i,j])
-                        assert relation_value >= Relation.EQ.value
-                        relation_set_index += 2 ** (relation_value - Relation.EQ.value)
+                        assert relation_value >= Relation.EQ
+                        relation_set_index += 2 ** (relation_value - Relation.EQ)
                 else:
                     num_rank = 0
                     inv_rank = 0
@@ -285,20 +300,60 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
         answer_coordinates = mapping["table"]
 
     current_cell_index = 1
-    for i in range(len(table)):
-        for j in range(len(table[i])):
+
+    colnum = len(table)
+    rownum = len(table[0])
+
+    token_type_ids = []
+
+    table_number_mat = np.zeros(colnum,rownum)
+    table_number_mat_sorted = np.zeros(colnum,rownum - 1)
+    getnan = [False] * colnum
+    
+    for i in range(colnum):
+        for j in range(rownum):
+            if is_number(table[i][j]):
+                table_number_mat[i,j] = to_number(table[i][j])
+            else:
+                if j > 0 :
+                   getnan[i] = True
+                table_number_mat[i,j] = np.nan
+        if not getnan[i]:
+            col_number_sorted = table_number_mat[i][1:].copy()
+            col_number_sorted.sorted(axis = 0)
+            table_number_mat_sorted[i] = col_number_sorted
+
+    
+    for j in range(rownum):
+        for i in range(colnum):
             cell_ids = string_tokenizer(table[i][j], tokenizer)
             if not cell_ids:
                 continue
             table_ids += cell_ids
-            if is_number(table[i][j]):
-                table_cell_number_value.append(to_number(table[i][j]))
-            else:
-                table_cell_number_value.append(np.nan)
+            
+            col_id = i + 1
+            row_id = j
+            relation_set_index = 0
+            table_cell_number_value.append(table_number_mat[i,j])
             table_cell_tokens.append(table[i][j])
+            if j > 0:
+                if not getnan[i]:
+                    rank_base = int(np.nonzero(table_number_mat_sorted[i] == table_number_mat[i,j])[0][0])
+                    num_rank = rank_base + 1
+                    inv_rank = rownum - 1 - rank_base
+                    for value in question_numbers:
+                        relation_value = get_numeric_relation(value,table_number_mat[i,j])
+                        assert relation_value >= Relation.EQ
+                        relation_set_index += 2 ** (relation_value - Relation.EQ)
+                else:
+                    num_rank = 0
+                    inv_rank = 0
+            else:
+                num_rank = 0
+                inv_rank = 0
+            token_type_ids.append([1,col_id,row_id,0,num_rank,inv_rank,relation_set_index])
             if table_mapping:
                 if [i, j] in answer_coordinates:
-                    mapping_content.append(table[i][j])
                     table_tags += [1 for _ in range(len(cell_ids))]
                 else:
                     table_tags += [0 for _ in range(len(cell_ids))]
@@ -306,7 +361,8 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
                 table_tags += [0 for _ in range(len(cell_ids))]
             table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
             current_cell_index += 1
-    return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index
+
+    return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,token_type_ids
 
 
 def paragraph_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
@@ -524,11 +580,11 @@ def _concat(question_ids,
             passage_length_limitation,
             max_pieces,
             num_ops,
-            ari_tags,):
+            ari_tags,
+            table_type_ids):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
     input_ids = torch.zeros([1, max_pieces])
-    input_segments = torch.zeros_like(input_ids)
     paragraph_mask = torch.zeros_like(input_ids)
     paragraph_index = torch.zeros_like(input_ids)
     table_mask = torch.zeros_like(input_ids)
@@ -538,6 +594,8 @@ def _concat(question_ids,
     opt_index = torch.zeros_like(input_ids)
     tags = torch.zeros_like(input_ids)
     ari_round_labels = torch.zeros([1,num_ops,input_ids.shape[1]])
+    token_type_ids = torch.zeros([1, max_pieces,7])
+                
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
@@ -575,6 +633,7 @@ def _concat(question_ids,
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
     tags[0, question_length+ paragraph_length +1 :question_length + table_length + paragraph_length +1] = torch.from_numpy(np.array(table_tags[:table_length]))
 
+    token_type_ids[0, question_length+ paragraph_length +1 :question_length + table_length + paragraph_length +1] = torch.from_numpy(np.array(table_type_ids[:table_length]))
     if paragraph_length > 0:
         paragraph_mask[0, question_length:question_length + paragraph_length] = 1
         paragraph_index[0, question_length:question_length +  paragraph_length] = \
@@ -615,7 +674,7 @@ def _concat(question_ids,
     del in_paragraph_index
 
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask,  table_index, tags, \
-            input_segments,opt_mask,opt_index,ari_round_labels,question_mask,question_length,question_length + table_length + paragraph_length
+            token_type_ids,opt_mask,opt_index,ari_round_labels,question_mask,question_length,question_length + table_length + paragraph_length
 
 def _test_concat(question_ids,
                 table_ids,
@@ -631,11 +690,11 @@ def _test_concat(question_ids,
                 question_length_limitation,
                 passage_length_limitation,
                 max_pieces,
-                num_ops):
+                num_ops,
+                table_type_ids):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
     input_ids = torch.zeros([1, max_pieces])
-    input_segments = torch.zeros_like(input_ids)
     paragraph_mask = torch.zeros_like(input_ids)
     paragraph_index = torch.zeros_like(input_ids)
     table_mask = torch.zeros_like(input_ids)
@@ -645,6 +704,7 @@ def _test_concat(question_ids,
     opt_mask = torch.zeros_like(input_ids)
     opt_index = torch.zeros_like(input_ids)
 
+    token_type_ids = torch.zeros([1, max_pieces,7])
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
@@ -680,7 +740,8 @@ def _test_concat(question_ids,
     table_index[0, question_length + paragraph_length + 1:question_length + table_length + paragraph_length +1 ] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
     tags[0, question_length+ paragraph_length +1 :question_length + table_length + paragraph_length +1] = torch.from_numpy(np.array(table_tags[:table_length]))
-
+    token_type_ids[0, question_length+ paragraph_length +1 :question_length + table_length + paragraph_length +1] = torch.from_numpy(np.array(table_type_ids[:table_length]))
+    
     if paragraph_length > 0:
         paragraph_mask[0, question_length:question_length + paragraph_length] = 1
         paragraph_index[0, question_length:question_length +  paragraph_length] = \
@@ -694,7 +755,7 @@ def _test_concat(question_ids,
     del in_table_cell_index
     del in_paragraph_index
     return input_ids, attention_mask, paragraph_mask, paragraph_index, \
-           table_mask,  table_index, tags, input_segments,opt_mask,opt_index,question_mask
+           table_mask,  table_index, tags, token_type_ids,opt_mask,opt_index,question_mask
 
 
 
@@ -878,7 +939,7 @@ class TagTaTQAReader(object):
                      answer_type: str, answer:str, derivation: str, facts:list,  answer_mapping: Dict, scale: str, question_id:str):
         question_text = question.strip()
         question_ids,question_numbers = question_tokenizer(question_text, self.tokenizer)
-        table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
+        table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,table_type_ids = \
                             table_tokenize(table, self.tokenizer, answer_mapping, answer_type,question_numbers)
         paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
                 paragraph_number_value, paragraph_index= \
@@ -1031,7 +1092,7 @@ class TagTaTQAReader(object):
             _concat(question_ids, table_ids, table_tags, table_cell_index, 
                     paragraph_ids, paragraph_tags, paragraph_index,
                     self.sep,self.opt,self.question_length_limit,
-                    self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags)
+                    self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags,table_type_ids)
 
 
         opd_ids = torch.zeros([1, self.max_pieces])
@@ -1334,7 +1395,7 @@ class TagTaTQATestReader(object):
             _test_concat(question_ids, table_ids, table_tags, table_cell_index,
                     paragraph_ids, paragraph_tags, paragraph_index,
                     self.sep,self.opt, self.question_length_limit,
-                    self.passage_length_limit, self.max_pieces,self.num_ops)
+                    self.passage_length_limit, self.max_pieces,self.num_ops,table_type_ids)
 
         if self.mode == "test":
             gold_ops= None
