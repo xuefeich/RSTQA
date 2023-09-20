@@ -209,7 +209,7 @@ def get_numeric_relation(value, other_value):
     if value > other_value:
         return Relation.GT
 
-def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
+def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers = []):
     table_cell_tokens = []
     table_ids = []
     table_tags = []
@@ -286,7 +286,7 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
             current_cell_index += 1
     return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,token_type_ids
 
-def table_test_tokenize(table, tokenizer, mapping, answer_type):
+def table_test_tokenize(table, tokenizer, mapping, answer_type,question_numbers = []):
     mapping_content = []
     table_cell_tokens = []
     table_ids = []
@@ -1371,6 +1371,7 @@ class TagTaTQATestReader(object):
     def _to_test_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
                      answer_type: str, answer:str, answer_mapping, scale: str, question_id:str, derivation, facts):
         question_text = question.strip()
+        question_ids,question_numbers = question_tokenizer(question_text, self.tokenizer)
 
         '''
         if self.mode == "dev":
@@ -1380,7 +1381,7 @@ class TagTaTQATestReader(object):
         '''
 
         table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
-            table_test_tokenize(table, self.tokenizer, answer_mapping, answer_type)
+            table_test_tokenize(table, self.tokenizer, answer_mapping, answer_type,question_numbers)
 
         paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
                 paragraph_number_value, paragraph_index, paragraph_mapping_content = \
@@ -1390,7 +1391,7 @@ class TagTaTQATestReader(object):
             gold_ops,truth_numbers,order_labels = self.summerize_op(derivation, answer_type, facts, answer, answer_mapping, scale,table_cell_number_value,paragraph_number_value)
             if gold_ops is None:
                 gold_ops = ["ignore"] *self.num_ops
-        question_ids = question_tokenizer(question_text, self.tokenizer)[0]
+        
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
         table_mask, table_index, tags, token_type_ids ,opt_mask,opt_index , question_mask= \
