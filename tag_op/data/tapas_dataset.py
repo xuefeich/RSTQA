@@ -276,12 +276,12 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
             token_type_ids.append([1,col_id,row_id,0,num_rank,inv_rank,relation_set_index])
             if table_mapping:
                 if [i, j] in answer_coordinates:
-                    table_tags += [1 for _ in range(len(cell_ids))]
+                    table_tags += [1 for _ in range(len(cell_ids[0]))]
                 else:
-                    table_tags += [0 for _ in range(len(cell_ids))]
+                    table_tags += [0 for _ in range(len(cell_ids[0]))]
             else:
-                table_tags += [0 for _ in range(len(cell_ids))]
-            table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
+                table_tags += [0 for _ in range(len(cell_ids[0]))]
+            table_cell_index += [current_cell_index for _ in range(len(cell_ids[0]))]
             current_cell_index += 1
     return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,token_type_ids
 
@@ -354,12 +354,12 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
             token_type_ids.append([1,col_id,row_id,0,num_rank,inv_rank,relation_set_index])
             if table_mapping:
                 if [i, j] in answer_coordinates:
-                    table_tags += [1 for _ in range(len(cell_ids))]
+                    table_tags += [1 for _ in range(len(cell_ids[0]))]
                 else:
-                    table_tags += [0 for _ in range(len(cell_ids))]
+                    table_tags += [0 for _ in range(len(cell_ids[0]))]
             else:
-                table_tags += [0 for _ in range(len(cell_ids))]
-            table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
+                table_tags += [0 for _ in range(len(cell_ids[0]))]
+            table_cell_index += [current_cell_index for _ in range(len(cell_ids[0]))]
             current_cell_index += 1
 
     return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,token_type_ids
