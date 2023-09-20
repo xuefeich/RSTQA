@@ -229,8 +229,8 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
 
     token_type_ids = []
 
-    table_number_mat = np.zeros(colnum,rownum)
-    table_number_mat_sorted = np.zeros(colnum,rownum - 1)
+    table_number_mat = np.zeros([colnum,rownum])
+    table_number_mat_sorted = np.zeros([colnum,rownum - 1])
     getnan = [False] * colnum
     
     for i in range(colnum):
@@ -306,8 +306,8 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
 
     token_type_ids = []
 
-    table_number_mat = np.zeros(colnum,rownum)
-    table_number_mat_sorted = np.zeros(colnum,rownum - 1)
+    table_number_mat = np.zeros([colnum,rownum])
+    table_number_mat_sorted = np.zeros([colnum,rownum - 1])
     getnan = [False] * colnum
     
     for i in range(colnum):
