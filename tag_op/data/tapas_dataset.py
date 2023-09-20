@@ -243,7 +243,7 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers):
                 table_number_mat[i,j] = np.nan
         if not getnan[i]:
             col_number_sorted = table_number_mat[i][1:].copy()
-            col_number_sorted.sorted(axis = 0)
+            col_number_sorted.sort(axis = 0)
             table_number_mat_sorted[i] = col_number_sorted
  
     for j in range(rownum):
@@ -320,7 +320,7 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type):
                 table_number_mat[i,j] = np.nan
         if not getnan[i]:
             col_number_sorted = table_number_mat[i][1:].copy()
-            col_number_sorted.sorted(axis = 0)
+            col_number_sorted.sort(axis = 0)
             table_number_mat_sorted[i] = col_number_sorted
 
     
