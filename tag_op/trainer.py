@@ -107,7 +107,6 @@ def main():
         arithmetic_op_index = arithmetic_op_index,
         op_mode = args.op_mode,
         ablation_mode = args.ablation_mode,
-        ari_operator_ids = ari_operator_ids,
     )
     logger.info("Build optimizer etc...")
 
