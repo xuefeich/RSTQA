@@ -124,7 +124,7 @@ class TagopModel(nn.Module):
                  ari_classes:int,
                  scale_classes: int,
                  num_ops : int,
-                 ari_operator_ids : dict,
+                 #ari_operator_ids : dict,
                  operator_criterion: nn.CrossEntropyLoss = None,
                  ari_criterion: nn.CrossEntropyLoss = None,
                  opt_criterion: nn.CrossEntropyLoss = None,
@@ -176,7 +176,7 @@ class TagopModel(nn.Module):
         self.arithmetic_op_index = arithmetic_op_index
 
         self.ARI_CLASSES = ARITHMETIC_CLASSES_
-        self.ari_operator_ids = ari_operator_ids
+        #self.ari_operator_ids = ari_operator_ids
         if ablation_mode == 0:
             self.OPERATOR_CLASSES = OPERATOR_CLASSES_
         elif ablation_mode == 1:
