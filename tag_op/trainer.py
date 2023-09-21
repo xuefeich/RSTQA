@@ -25,7 +25,7 @@ parser.add_argument("--op_mode", type=int, default=0)
 parser.add_argument("--ablation_mode", type=int, default=0)
 parser.add_argument("--test_data_dir", type=str, default="./tag_op/cache")
 parser.add_argument("--num_ops", type=int, default=6)
-parser.add_argument("--model_path", type=str, default='')
+parser.add_argument("--tapas_path", type=str, default='')
 
 args = parser.parse_args()
 if args.ablation_mode != 0:
@@ -61,7 +61,7 @@ def main():
 
     logger.info(f"Build {args.encoder} model.")
     if args.encoder == 'tapas':
-        bert_model = TapasForQuestionAnswering.from_pretrained(args.model_path + "/tapas.large")
+        bert_model = TapasForQuestionAnswering.from_pretrained(args.tapas_path + "/tapas.large")
     elif args.encoder == 'roberta':
         bert_model = RobertaModel.from_pretrained(args.roberta_model)
     elif args.encoder == 'finbert':
