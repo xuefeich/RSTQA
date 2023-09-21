@@ -12,7 +12,7 @@ from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
 from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.tagop.util import create_logger, set_environment
 from tag_op.data.tatqa_batch_gen import TaTQABatchGen, TaTQATestBatchGen
-from transformers import RobertaModel, BertModel,TapasForQuestionAnswering
+from transformers import RobertaModel, BertModel,TapasModel
 from tag_op.tagop.modeling_rstqa import TagopModel
 from tag_op.tagop.model import TagopFineTuningModel
 from pathlib import Path
@@ -61,7 +61,7 @@ def main():
 
     logger.info(f"Build {args.encoder} model.")
     if args.encoder == 'tapas':
-        bert_model = TapasForQuestionAnswering.from_pretrained(args.tapas_path + "/tapas.large")
+        bert_model = TapasModel.from_pretrained(args.tapas_path + "/tapas.large")
     elif args.encoder == 'roberta':
         bert_model = RobertaModel.from_pretrained(args.roberta_model)
     elif args.encoder == 'finbert':
@@ -89,7 +89,7 @@ def main():
     #     fr.close()
     # print(bert_model.config)
     # bert_model.resize_token_embeddings(bert_model.config.vocab_size+len(ari_operator_ids)+1)
-    bert_model.resize_token_embeddings(bert_model.config.vocab_size+1)
+    bert_model.resize_token_embeddings(bert_model.config.vocab_size+2)
     network = TagopModel(
         encoder = bert_model,
         config = bert_model.config,
