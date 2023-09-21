@@ -12,7 +12,7 @@ from tag_op.data.tatqa_batch_gen import TaTQATestBatchGen
 from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.data.data_util import get_op_1, get_op_2, get_arithmetic_op_index_1, get_arithmetic_op_index_2
 from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
-from transformers import RobertaModel, BertModel,TapasForQuestionAnswering
+from transformers import RobertaModel, BertModel,TapasModel
 from tag_op.tagop.modeling_rstqa import TagopModel
 from tag_op.tagop.model import TagopPredictModel
 
@@ -53,7 +53,7 @@ def main():
     if args.encoder == 'roberta':
         bert_model = RobertaModel.from_pretrained(args.roberta_model)
     elif args.encoder == 'tapas':
-        bert_model = TapasForQuestionAnswering.from_pretrained(args.tapas_path + "/tapas.large")
+        bert_model = TapasModel.from_pretrained(args.tapas_path + "/tapas.large")
 
     if args.ablation_mode == 0:
         operators = OPERATOR_CLASSES_
@@ -78,7 +78,7 @@ def main():
     #     fr.close()
     # print(bert_model.config)
     # bert_model.resize_token_embeddings(bert_model.config.vocab_size+len(ari_operator_ids)+1)
-    bert_model.resize_token_embeddings(bert_model.config.vocab_size+1)
+    bert_model.resize_token_embeddings(bert_model.config.vocab_size+2)
     network = TagopModel(
         encoder = bert_model,
         config = bert_model.config,
