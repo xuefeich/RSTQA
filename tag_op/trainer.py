@@ -89,7 +89,7 @@ def main():
     #     fr.close()
     # print(bert_model.config)
     # bert_model.resize_token_embeddings(bert_model.config.vocab_size+len(ari_operator_ids)+1)
-    bert_model.resize_token_embeddings(bert_model.config.vocab_size+2)
+    bert_model.resize_token_embeddings(bert_model.config.vocab_size+1)
     network = TagopModel(
         encoder = bert_model,
         config = bert_model.config,
