@@ -263,10 +263,12 @@ def table_tokenize(table, tokenizer, mapping, answer_type,question_numbers = [])
                     rank_base = int(np.nonzero(table_number_mat_sorted[i] == table_number_mat[i,j])[0][0])
                     num_rank = rank_base + 1
                     inv_rank = rownum - 1 - rank_base
-                    for value in question_numbers:
-                        relation_value = get_numeric_relation(value,table_number_mat[i,j])
-                        assert relation_value >= Relation.EQ
-                        relation_set_index += 2 ** (relation_value - Relation.EQ)
+                    # for value in question_numbers:
+                    #     relation_value = get_numeric_relation(value,table_number_mat[i,j])
+                    #     assert relation_value >= Relation.EQ
+                    #     relation_set_index += 2 ** (relation_value - Relation.EQ)
+                    if len(question_numbers) > 0:
+                        relation_set_index = 2
                 else:
                     num_rank = 0
                     inv_rank = 0
@@ -342,10 +344,12 @@ def table_test_tokenize(table, tokenizer, mapping, answer_type,question_numbers 
                     rank_base = int(np.nonzero(table_number_mat_sorted[i] == table_number_mat[i,j])[0][0])
                     num_rank = rank_base + 1
                     inv_rank = rownum - 1 - rank_base
-                    for value in question_numbers:
-                        relation_value = get_numeric_relation(value,table_number_mat[i,j])
-                        assert relation_value >= Relation.EQ
-                        relation_set_index += 2 ** (relation_value - Relation.EQ)
+                    # for value in question_numbers:
+                    #     relation_value = get_numeric_relation(value,table_number_mat[i,j])
+                    #     assert relation_value >= Relation.EQ
+                    #     relation_set_index += 2 ** (relation_value - Relation.EQ)
+                    if len(question_numbers) > 0:
+                        relation_set_index = 2
                 else:
                     num_rank = 0
                     inv_rank = 0
@@ -577,6 +581,7 @@ def _concat(question_ids,
             paragraph_index,
             #paragraph_number_value,
             sep,
+            cls,
             opt,
             question_length_limitation,
             passage_length_limitation,
@@ -601,7 +606,7 @@ def _concat(question_ids,
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
-    question_ids = [sep] + question_ids + [sep]
+    question_ids = [cls] + question_ids + [sep]
     question_length = len(question_ids)
     question_mask[0,1:question_length-1] = 1
     table_length = len(table_ids)
@@ -688,6 +693,7 @@ def _test_concat(question_ids,
                 paragraph_index,
                 #paragraph_number_value,
                 sep,
+                cls,
                 opt,
                 question_length_limitation,
                 passage_length_limitation,
@@ -710,7 +716,7 @@ def _test_concat(question_ids,
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
-    question_ids = [sep] + question_ids + [sep]
+    question_ids = [cls] + question_ids + [sep]
     question_length = len(question_ids)
     question_mask[0,1:question_length-1] = 1
 
@@ -781,6 +787,7 @@ class TagTaTQAReader(object):
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer.convert_tokens_to_ids(sep)
         self.opt = self.tokenizer.convert_tokens_to_ids("[OPT]")
+        self.cls = self.tokenizer.convert_tokens_to_ids("[CLS]")
         self.num_ops = num_ari_ops
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
@@ -1093,7 +1100,7 @@ class TagTaTQAReader(object):
         table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_labels,question_mask,ql,qtpl = \
             _concat(question_ids, table_ids, table_tags, table_cell_index, 
                     paragraph_ids, paragraph_tags, paragraph_index,
-                    self.sep,self.opt,self.question_length_limit,
+                    self.sep,self.cls,self.opt,self.question_length_limit,
                     self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags,table_type_ids)
 
 
@@ -1205,6 +1212,7 @@ class TagTaTQATestReader(object):
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer.convert_tokens_to_ids(sep)
         self.opt = self.tokenizer.convert_tokens_to_ids("[OPT]")
+        self.cls = self.tokenizer.convert_tokens_to_ids("[CLS]")
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
         self.op_skip = 0
@@ -1397,7 +1405,7 @@ class TagTaTQATestReader(object):
         table_mask, table_index, tags, token_type_ids ,opt_mask,opt_index , question_mask= \
             _test_concat(question_ids, table_ids, table_tags, table_cell_index,
                     paragraph_ids, paragraph_tags, paragraph_index,
-                    self.sep,self.opt, self.question_length_limit,
+                    self.sep,self.cls,self.opt, self.question_length_limit,
                     self.passage_length_limit, self.max_pieces,self.num_ops,table_type_ids)
 
         if self.mode == "test":
