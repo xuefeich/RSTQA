@@ -12,7 +12,7 @@ from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
 from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.tagop.util import create_logger, set_environment
 from tag_op.data.tatqa_batch_gen import TaTQABatchGen, TaTQATestBatchGen
-from transformers import RobertaModel, BertModel,TapasModel
+from transformers import RobertaModel, BertModel,TapasModel,DebertaV2Model
 from tag_op.tagop.modeling_rstqa import TagopModel
 from tag_op.tagop.model import TagopFineTuningModel
 from pathlib import Path
@@ -25,7 +25,7 @@ parser.add_argument("--op_mode", type=int, default=0)
 parser.add_argument("--ablation_mode", type=int, default=0)
 parser.add_argument("--test_data_dir", type=str, default="./tag_op/cache")
 parser.add_argument("--num_ops", type=int, default=6)
-parser.add_argument("--tapas_path", type=str, default='')
+parser.add_argument("--plm_path", type=str, default='')
 
 args = parser.parse_args()
 if args.ablation_mode != 0:
@@ -61,11 +61,11 @@ def main():
 
     logger.info(f"Build {args.encoder} model.")
     if args.encoder == 'tapas':
-        bert_model = TapasModel.from_pretrained(args.tapas_path + "/tapas.large")
+        bert_model = TapasModel.from_pretrained(args.plm_path + "/tapas.large")
     elif args.encoder == 'roberta':
         bert_model = RobertaModel.from_pretrained(args.roberta_model)
-    elif args.encoder == 'finbert':
-        bert_model = BertModel.from_pretrained(args.finbert_model)
+    elif args.encoder == 'deberta':
+        bert_model = DebertaV2Model.from_pretrained(args.plm_path + "/deberta-v2-xlarge")
 
     if args.ablation_mode == 0:
         operators = OPERATOR_CLASSES_
