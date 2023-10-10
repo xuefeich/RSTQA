@@ -29,7 +29,7 @@ parser.add_argument("--encoder", type=str, default='roberta')
 parser.add_argument("--test_data_dir", type=str, default="tag_op/cache/")
 parser.add_argument("--num_ops", type=int, default=6)
 parser.add_argument("--set", type=str, default="dev")
-
+parser.add_argument("--plm_path", type=str, default='')
 args = parser.parse_args()
 if args.ablation_mode != 0:
     args.model_path = args.model_path + "_{}_{}".format(args.op_mode, args.ablation_mode)
