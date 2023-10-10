@@ -12,7 +12,7 @@ from tag_op.data.tatqa_batch_gen import TaTQATestBatchGen
 from tag_op.data.data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
 from tag_op.data.data_util import get_op_1, get_op_2, get_arithmetic_op_index_1, get_arithmetic_op_index_2
 from tag_op.data.data_util import get_op_3, get_arithmetic_op_index_3
-from transformers import RobertaModel, BertModel,TapasModel
+from transformers import RobertaModel, BertModel,TapasModel,DebertaV2Model
 from tag_op.tagop.modeling_rstqa import TagopModel
 from tag_op.tagop.model import TagopPredictModel
 
@@ -55,7 +55,7 @@ def main():
     elif args.encoder == 'tapas':
         bert_model = TapasModel.from_pretrained(args.plm_path + "/tapas.large")
     elif args.encoder == 'deberta':
-        bert_model = TapasModel.from_pretrained(args.plm_path + "/deberta-v2-xlarge")
+        bert_model = DebertaV2Model.from_pretrained(args.plm_path + "/deberta-v2-xlarge")
 
     if args.ablation_mode == 0:
         operators = OPERATOR_CLASSES_
