@@ -30,7 +30,7 @@ elif args.encoder == 'tapas':
 elif args.encoder == 'deberta':
     from transformers import DebertaV2Tokenizer
     from tag_op.data.deberta_dataset import TagTaTQAReader, TagTaTQATestReader
-    tokenizer = TapasTokenizer.from_pretrained(args.model_path + "/deberta-v2-xlarge")
+    tokenizer = DebertaV2Tokenizer.from_pretrained(args.model_path + "/deberta-v2-xlarge")
     tokenizer.add_special_tokens({'additional_special_tokens':['[OPT]']})
     sep = '[SEP]'
 
