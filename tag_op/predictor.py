@@ -53,7 +53,9 @@ def main():
     if args.encoder == 'roberta':
         bert_model = RobertaModel.from_pretrained(args.roberta_model)
     elif args.encoder == 'tapas':
-        bert_model = TapasModel.from_pretrained(args.tapas_path + "/tapas.large")
+        bert_model = TapasModel.from_pretrained(args.plm_path + "/tapas.large")
+    elif args.encoder == 'deberta':
+        bert_model = TapasModel.from_pretrained(args.plm_path + "/deberta-v2-xlarge")
 
     if args.ablation_mode == 0:
         operators = OPERATOR_CLASSES_
