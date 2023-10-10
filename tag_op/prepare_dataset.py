@@ -2,7 +2,6 @@ import os
 import pickle
 import argparse
 from transformers.models.roberta.tokenization_roberta import RobertaTokenizer
-
 import json
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_path", type=str, default='./dataset_tagop')
@@ -28,6 +27,13 @@ elif args.encoder == 'tapas':
     tokenizer = TapasTokenizer.from_pretrained(args.model_path + "/tapas.large")
     tokenizer.add_special_tokens({'additional_special_tokens':['[OPT]']})
     sep = '[SEP]'
+elif args.encoder == 'deberta':
+    from transformers import DebertaV2Tokenizer
+    from tag_op.data.deberta_dataset import TagTaTQAReader, TagTaTQATestReader
+    tokenizer = TapasTokenizer.from_pretrained(args.model_path + "/deberta-v2-xlarge")
+    tokenizer.add_special_tokens({'additional_special_tokens':['[OPT]']})
+    sep = '[SEP]'
+
 
 
 if args.mode == 'test':
