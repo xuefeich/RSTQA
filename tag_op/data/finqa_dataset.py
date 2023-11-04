@@ -871,11 +871,15 @@ class TagTaTQAReader(object):
         paragraph_tokens, paragraph_ids,  paragraph_word_piece_mask, paragraph_number_mask, \
             paragraph_number_value, paragraph_index = paragraph_tokenize(question, paragraphs, self.tokenizer)
 
-
         order_labels = np.zeros(self.num_ops)
         opt_labels = torch.zeros(1, self.num_ops - 1, self.num_ops - 1)
-        ari_tags = {'table': [], 'para': [],"const":[]}
+        ari_tags = {'table': [], 'para': []}
+        const_dict{1:1,2:2,3:3,4:4,5:5,100:6,1000:7,1000000:8}
+        const_list = []
+        const_labels = []
 
+        sorted_order = get_order_by_tf_idf(question, paragraphs)
+        
         if answer in ["yes","no"]:
             task = "COMPARE"
         else:
@@ -890,15 +894,30 @@ class TagTaTQAReader(object):
                     j = int(opd1.strip("#"))
                     opt_labels[0,j,i-1] = 1
                 elif "const" in opd1:
-                    number_indexes.append()
+                    if opd1 not in const_list:
+                        number_indexes.append([const_dict[int(opd1.strip("const_"))]])
+                        const_labels.append([0,0,0,0,0,0])
+                        const_labels[-1][i] = 1
+                        const_list.append(opd1)
+                    else:
+                        const_labels[const_list.index(opd1)][i] = 1
                 else:
-                    opd1_mapping = find_mapping(opd1,table,paragraphs)
+                    opd1_mapping = find_mapping(opd1,table,paragraphs)                                
+                
                 if "#" in opd2:
                     j = int(opd2.strip("#"))
                     if op in ["add","multiply"]:
                         opt_labels[0,j,i-1] = 1
                     else:
                         opt_labels[0, j, i - 1] = 2
+                elif "const" in opd2:
+                    if opd2 not in const_list:
+                        number_indexes.append([const_dict[int(opd2.strip("const_"))]])
+                        const_labels.append([0,0,0,0,0,0])
+                        const_labels[-1][i] = 1
+                        const_list.append(opd2)
+                    else:
+                        const_labels[const_list.index(opd2)][i] = 1
                 else:
                     opd2_mapping = find_mapping(opd2,table,paragraphs)
 
@@ -931,8 +950,29 @@ class TagTaTQAReader(object):
                     op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping)
                     ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
                     ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
-
-
+                    if "const" in opd1:
+                       if "const" in opd2:
+                           if int(opd1.strip("const_")) > int(opd2.strip("const_")):
+                               order_labels[i] = 1
+                    elif "table" in opd1_mapping:
+                        if "const" in opd2:
+                            order_labels[i] = 1
+                        elif "table" in opd2_mapping:
+                            if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
+                                order_labels[i] = 1
+                            elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
+                                order_labels[i] = 1
+                    elif "paragraph" in opd1_mapping:
+                        if "paragraph" in opd2_mapping:
+                            opd1_pid = sorted_order.index(list(opd1_mapping["paragraph"].keys())[0])
+                            opd2_pid = sorted_order.index(list(opd2_mapping["paragraph"].keys())[0])
+                            if int(opd1_pid) > int(opd2_pid):
+                                order_labels[i] = 1
+                            elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][opd1_pid][0][0] > opd2_mapping["paragraph"][opd2_pid][0][0]:
+                                order_labels[i] = 1
+                        else:
+                            order_labels[i] = 1
+        
         for i in range(len(table)):
             for j in range(len(table[i])):
                 if table[i][j] == '' or table[i][j] == 'N/A' or table[i][j] == 'n/a':
