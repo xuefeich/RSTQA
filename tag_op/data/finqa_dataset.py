@@ -874,12 +874,12 @@ class TagTaTQAReader(object):
 
         order_labels = np.zeros(self.num_ops)
         opt_labels = torch.zeros(1, self.num_ops - 1, self.num_ops - 1)
-
-        ari_tags = {'table': [], 'para': []}
+        ari_tags = {'table': [], 'para': [],"const":[]}
 
         if answer in ["yes","no"]:
             task = "COMPARE"
         else:
+            task = "ARITHMETIC"
             dlist = derivation.split("),")
             for i,d in enumerate(dlist):
                 [opd1,opd2] = d.split(",")
@@ -889,6 +889,8 @@ class TagTaTQAReader(object):
                 if "#" in opd1:
                     j = int(opd1.strip("#"))
                     opt_labels[0,j,i-1] = 1
+                elif "const" in opd1:
+                    number_indexes.append()
                 else:
                     opd1_mapping = find_mapping(opd1,table,paragraphs)
                 if "#" in opd2:
