@@ -496,7 +496,8 @@ def _concat(question_ids,
             passage_length_limitation,
             max_pieces,
             num_ops,
-            ari_tags):
+            ari_tags,
+            const):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
     input_ids = torch.zeros([1, max_pieces])
@@ -593,7 +594,7 @@ def _concat(question_ids,
     del in_paragraph_index
 
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask, table_index, \
-        input_segments, opt_mask, opt_index, ari_round_tags, opd_two_tags, ari_round_labels, question_mask, question_length, question_length + table_length + paragraph_length
+        input_segments, opt_mask, opt_index, ari_round_tags, opd_two_tags, ari_round_labels, question_mask
 
 
 def _test_concat(question_ids,
@@ -697,6 +698,10 @@ class TagTaTQAReader(object):
         self.sep = self.tokenizer._convert_token_to_id(sep)
         self.cls = self.tokenizer._convert_token_to_id("[CLS]")
         self.opt = self.tokenizer._convert_token_to_id("[OPT]")
+        self.const = []
+        for const in list(const_dict.keys()):
+            self.const.append(self.tokenizer._convert_token_to_id(str(const)))
+                     
         self.num_ops = num_ari_ops
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
@@ -970,13 +975,17 @@ class TagTaTQAReader(object):
         question_ids = question_tokenizer(question_text, self.tokenizer)
 
         input_ids, attention_mask, paragraph_mask, paragraph_index, \
-            table_mask, table_index, token_type_ids, opt_mask, opt_index, ari_round_tags, opd_two_tags, ari_round_labels, question_mask, ql, qtpl = \
+            table_mask, table_index, token_type_ids, opt_mask, opt_index, ari_round_tags, opd_two_tags, ari_round_labels, question_mask = \
             _concat(question_ids, table_ids, table_cell_index,
                     paragraph_ids, paragraph_index, self.cls,
                     self.sep, self.opt, self.question_length_limit,
-                    self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags,const_list)
-
+                    self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags,self.const)
+        
         tags = combine_tags(ari_round_tags,opd_two_tags)
+
+        for const in const_list:
+            tags[0,const_dict[const]] = 1
+        
         if answer_type == "arithmetic":
             ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
             
@@ -988,7 +997,7 @@ class TagTaTQAReader(object):
                                    opt_index, opt_labels,
                                    ari_round_labels, order_labels, question_mask)
 
-    def _read(self, file_path: str):            # tags = whole_tags
+    def _read(self, file_path: str):
         print("Reading file at %s", file_path)
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
