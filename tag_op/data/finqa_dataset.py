@@ -18,6 +18,9 @@ from .data_util import _is_average, _is_change_ratio, _is_diff, _is_division, _i
 from .derivation_split import infix_evaluator
 from .mapping_split import split_mapping
 
+const_dict = {1:1,2:2,3:3,4:4,5:5,100:6,1000:7,1000000:8}
+
+
 if is_scatter_available():
     from torch_scatter import scatter
 
@@ -375,7 +378,7 @@ def paragraph_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
         if len(sub_tokens) > 1:
             word_piece_mask += [0] * (len(sub_tokens) - 1)
     paragraph_ids = tokenizer.convert_tokens_to_ids(split_tokens)
-    return tokens, paragraph_ids, split_tags, word_piece_mask, number_mask, number_value, paragraph_index
+    return tokens, paragraph_ids, split_tags, word_piece_mask, number_mask, number_value, paragraph_index,sorted_order
 
 
 def paragraph_test_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
@@ -483,13 +486,9 @@ def question_tokenizer(question_text, tokenizer):
 
 def _concat(question_ids,
             table_ids,
-            table_tags,
             table_cell_index,
-            # table_cell_number_value,
             paragraph_ids,
-            paragraph_tags,
             paragraph_index,
-            # paragraph_number_value,
             cls,
             sep,
             opt,
@@ -497,7 +496,7 @@ def _concat(question_ids,
             passage_length_limitation,
             max_pieces,
             num_ops,
-            ari_tags, ):
+            ari_tags):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
     input_ids = torch.zeros([1, max_pieces])
@@ -509,16 +508,15 @@ def _concat(question_ids,
     table_index = torch.zeros_like(input_ids)
     opt_mask = torch.zeros_like(input_ids)
     opt_index = torch.zeros_like(input_ids)
-    tags = torch.zeros_like(input_ids)
     opd_two_tags = torch.zeros([1, num_ops, input_ids.shape[1]])
     ari_round_tags = torch.zeros([1, num_ops, input_ids.shape[1]])
     ari_round_labels = torch.zeros([1, num_ops, input_ids.shape[1]])
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
-    question_ids = [cls] + question_ids + [sep]
+    question_ids = [cls] + const + [sep] + question_ids + [sep]
     question_length = len(question_ids)
-    question_mask[0, 1:question_length - 1] = 1
+    question_mask[0, 10:question_length - 1] = 1
     table_length = len(table_ids)
     paragraph_length = len(paragraph_ids)
     if passage_length_limitation is not None:
@@ -546,31 +544,24 @@ def _concat(question_ids,
     table_mask[0, question_length:question_length + table_length] = 1
     table_index[0, question_length:question_length + table_length] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
-    tags[0, question_length:question_length + table_length] = torch.from_numpy(np.array(table_tags[:table_length]))
 
     if paragraph_length > 1:
         paragraph_mask[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = 1
         paragraph_index[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
             torch.from_numpy(np.array(in_paragraph_index[:paragraph_length - 1]))
-        tags[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
-            torch.from_numpy(np.array(paragraph_tags[:paragraph_length - 1]))
 
-    opt_mask[0,
-    question_length + table_length + paragraph_length + 1: question_length + table_length + paragraph_length + num_ops + 1] = 1
-    # opt_index[0,question_length + table_length + paragraph_length + 1:question_length + table_length + paragraph_length + num_ops+1] = torch.from_numpy(np.array([1,2,3,4,5,6]))
+    opt_mask[0,question_length + table_length + paragraph_length + 1: question_length + table_length + paragraph_length + num_ops + 1] = 1
     if ari_tags != None:
         ari_table_tags = ari_tags["table"]
         ari_para_tags = ari_tags["para"]
-        # ari_opt_tags = ari_tags["operation"]
         for i in range(num_ops):
             r_num_ops = len(ari_table_tags)
             if i >= r_num_ops:
                 break
             if isinstance(ari_table_tags[i], dict):
-
                 opd1_tags = np.array(ari_table_tags[i]["operand1"][:table_length])
                 opd2_tags = np.array(ari_table_tags[i]["operand2"][:table_length])
-                # ari_round_tags[0,i,question_length:question_length + table_length] = torch.from_numpy(opd1_tags)
+                ari_round_tags[0,i,question_length:question_length + table_length] = torch.from_numpy(opd1_tags)
                 opd_two_tags[0, i, question_length:question_length + table_length] = torch.from_numpy(opd2_tags)
                 for j in np.where(opd2_tags == 1):
                     opd1_tags[j] = 1
@@ -579,15 +570,11 @@ def _concat(question_ids,
                 if paragraph_length > 1:
                     p_opd1_tags = np.array(ari_para_tags[i]["operand1"][:paragraph_length - 1])
                     p_opd2_tags = np.array(ari_para_tags[i]["operand2"][:paragraph_length - 1])
-                    # ari_round_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
-                    opd_two_tags[0, i,
-                    question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(
-                        p_opd2_tags)
+                    ari_round_tags[0,i, question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
+                    opd_two_tags[0, i,question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd2_tags)
                     for j in np.where(p_opd2_tags == 1):
                         p_opd1_tags[j] = 1
-                    ari_round_labels[0, i,
-                    question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(
-                        p_opd1_tags)
+                    ari_round_labels[0, i,question_length + table_length + 1:question_length + table_length + paragraph_length] = torch.from_numpy(p_opd1_tags)
 
             else:
                 ari_round_tags[0, i, question_length:question_length + table_length] = torch.from_numpy(
@@ -605,7 +592,7 @@ def _concat(question_ids,
     del in_table_cell_index
     del in_paragraph_index
 
-    return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask, table_index, tags, \
+    return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask, table_index, \
         input_segments, opt_mask, opt_index, ari_round_tags, opd_two_tags, ari_round_labels, question_mask, question_length, question_length + table_length + paragraph_length
 
 
@@ -869,16 +856,13 @@ class TagTaTQAReader(object):
         question_text = question.strip()
         table_cell_tokens, table_ids,table_cell_number_value, table_cell_index = table_tokenize(table, self.tokenizer)
         paragraph_tokens, paragraph_ids,  paragraph_word_piece_mask, paragraph_number_mask, \
-            paragraph_number_value, paragraph_index = paragraph_tokenize(question, paragraphs, self.tokenizer)
+            paragraph_number_value, paragraph_index,sorted_order = paragraph_tokenize(question, paragraphs, self.tokenizer)
 
         order_labels = np.zeros(self.num_ops)
         opt_labels = torch.zeros(1, self.num_ops - 1, self.num_ops - 1)
         ari_tags = {'table': [], 'para': []}
-        const_dict{1:1,2:2,3:3,4:4,5:5,100:6,1000:7,1000000:8}
         const_list = []
         const_labels = []
-
-        sorted_order = get_order_by_tf_idf(question, paragraphs)
         
         if answer in ["yes","no"]:
             task = "COMPARE"
@@ -990,31 +974,12 @@ class TagTaTQAReader(object):
             _concat(question_ids, table_ids, table_cell_index,
                     paragraph_ids, paragraph_index, self.cls,
                     self.sep, self.opt, self.question_length_limit,
-                    self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags)
+                    self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags,const_list)
 
-
-
-
-        # whole_tags = combine_tags(ari_round_tags,opd_two_tags)
+        tags = combine_tags(ari_round_tags,opd_two_tags)
         if answer_type == "arithmetic":
-            # tags = whole_tags
             ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
-            if len(ari_ops) >= 2:
-                for i in range(1, len(ari_ops)):
-                    opt_tags = ari_tags["operation"][i]
-                    if isinstance(opt_tags, dict):
-                        opd1_opt_tags = opt_tags["operand1"]
-                        for j in range(self.num_ops - 1):
-                            if opd1_opt_tags[j] == 1:
-                                opt_labels[0, j, i - 1] = 1
-                        opd2_opt_tags = opt_tags["operand2"]
-                        for j in range(self.num_ops - 1):
-                            if opd2_opt_tags[j] == 1:
-                                opt_labels[0, j, i - 1] = 2
-                    else:
-                        for j in range(self.num_ops - 1):
-                            if opt_tags[j] == 1:
-                                opt_labels[0, j, i - 1] = 1
+            
         answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                                    paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags,
@@ -1023,7 +988,7 @@ class TagTaTQAReader(object):
                                    opt_index, opt_labels,
                                    ari_round_labels, order_labels, question_mask)
 
-    def _read(self, file_path: str):
+    def _read(self, file_path: str):            # tags = whole_tags
         print("Reading file at %s", file_path)
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
