@@ -210,28 +210,37 @@ def string_tokenizer(string: str, tokenizer) -> List[int]:
 def table_tokenize(table, tokenizer, mapping, answer_type):
     table_cell_tokens = []
     table_ids = []
-    table_tags = []
     table_cell_index = []
     table_cell_number_value = []
+    current_cell_index = 1
+    for i in range(len(table)):
+        for j in range(len(table[i])):
+            cell_ids = string_tokenizer(table[i][j], tokenizer)
+            if not cell_ids:
+                continue
+            table_ids += cell_ids
+            if is_number(table[i][j]):
+                table_cell_number_value.append(to_number(table[i][j]))
+            else:
+                table_cell_number_value.append(np.nan)
+            table_cell_tokens.append(table[i][j])
+            table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
+            current_cell_index += 1
+    return table_cell_tokens, table_ids, table_cell_number_value, table_cell_index
+
+
+def table_tagging(table, tokenizer, mapping):
+    table_tags = []
     table_mapping = False
     answer_coordinates = None
-
     if "table" in mapping and len(mapping["table"]) != 0:
         table_mapping = True
         answer_coordinates = mapping["table"]
-
-    current_cell_index = 1
     for i in range(len(table)):
         for j in range(len(table[i])):
             cell_ids = string_tokenizer(table[i][j], tokenizer)
             if not cell_ids:
                 continue
-            table_ids += cell_ids
-            if is_number(table[i][j]):
-                table_cell_number_value.append(to_number(table[i][j]))
-            else:
-                table_cell_number_value.append(np.nan)
-            table_cell_tokens.append(table[i][j])
             if table_mapping:
                 if [i, j] in answer_coordinates:
                     table_tags += [1 for _ in range(len(cell_ids))]
@@ -239,49 +248,8 @@ def table_tokenize(table, tokenizer, mapping, answer_type):
                     table_tags += [0 for _ in range(len(cell_ids))]
             else:
                 table_tags += [0 for _ in range(len(cell_ids))]
-            table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
-            current_cell_index += 1
-    return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index
-
-
-def table_test_tokenize(table, tokenizer, mapping, answer_type):
-    mapping_content = []
-    table_cell_tokens = []
-    table_ids = []
-    table_tags = []
-    table_cell_index = []
-    table_cell_number_value = []
-    table_mapping = False
-    answer_coordinates = None
-
-    if mapping and "table" in mapping and len(mapping["table"]) != 0:
-        table_mapping = True
-        answer_coordinates = mapping["table"]
-
-    current_cell_index = 1
-    for i in range(len(table)):
-        for j in range(len(table[i])):
-            cell_ids = string_tokenizer(table[i][j], tokenizer)
-            if not cell_ids:
-                continue
-            table_ids += cell_ids
-            if is_number(table[i][j]):
-                table_cell_number_value.append(to_number(table[i][j]))
-            else:
-                table_cell_number_value.append(np.nan)
-            table_cell_tokens.append(table[i][j])
-            if table_mapping:
-                if [i, j] in answer_coordinates:
-                    mapping_content.append(table[i][j])
-                    table_tags += [1 for _ in range(len(cell_ids))]
-                else:
-                    table_tags += [0 for _ in range(len(cell_ids))]
-            else:
-                table_tags += [0 for _ in range(len(cell_ids))]
-            table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
-            current_cell_index += 1
-    return table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index
-
+    return table_tags
+    
 
 def paragraph_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
     paragraphs_copy = paragraphs.copy()
@@ -378,8 +346,101 @@ def paragraph_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
         if len(sub_tokens) > 1:
             word_piece_mask += [0] * (len(sub_tokens) - 1)
     paragraph_ids = tokenizer.convert_tokens_to_ids(split_tokens)
-    return tokens, paragraph_ids, split_tags, word_piece_mask, number_mask, number_value, paragraph_index,sorted_order
+    return tokens, paragraph_ids, word_piece_mask, number_mask, number_value, paragraph_index,sorted_order
 
+
+
+def paragraph_tagging(question, paragraphs, tokenizer, mapping,sorted_order):
+    paragraphs_copy = paragraphs.copy()
+    paragraphs = {}
+    for paragraph in paragraphs_copy:
+        paragraphs[paragraph["order"]] = paragraph["text"]
+    del paragraphs_copy
+    split_tokens = []
+    split_tags = []
+    number_mask = []
+    number_value = []
+    tokens = []
+    tags = []
+    word_piece_mask = []
+    paragraph_index = []
+    paragraph_mapping = False
+    paragraph_mapping_orders = []
+    if "paragraph" in list(mapping.keys()) and len(mapping["paragraph"].keys()) != 0:
+        paragraph_mapping = True
+        paragraph_mapping_orders = list(mapping["paragraph"].keys())
+    for order in sorted_order:
+        text = paragraphs[order]
+        prev_is_whitespace = True
+        answer_indexs = None
+        if paragraph_mapping and str(order) in paragraph_mapping_orders:
+            answer_indexs = mapping["paragraph"][str(order)]
+        current_tags = [0 for i in range(len(text))]
+        if answer_indexs is not None:
+            for answer_index in answer_indexs:
+                current_tags[answer_index[0]:answer_index[1]] = \
+                    [1 for i in range(len(current_tags[answer_index[0]:answer_index[1]]))]
+
+        start_index = 0
+        wait_add = False
+        for i, c in enumerate(text):
+            if is_whitespace(c):  # or c in ["-", "–", "~"]:
+                if wait_add:
+                    if 1 in current_tags[start_index:i]:
+                        tags.append(1)
+                    else:
+                        tags.append(0)
+                    wait_add = False
+                prev_is_whitespace = True
+            elif c in ["-", "–", "~"]:
+                if wait_add:
+                    if 1 in current_tags[start_index:i]:
+                        tags.append(1)
+                    else:
+                        tags.append(0)
+                    wait_add = False
+                tokens.append(c)
+                tags.append(0)
+                prev_is_whitespace = True
+            else:
+                if prev_is_whitespace:
+                    tokens.append(c)
+                    wait_add = True
+                    start_index = i
+                else:
+                    tokens[-1] += c
+                prev_is_whitespace = False
+        if wait_add:
+            if 1 in current_tags[start_index:len(text)]:
+                tags.append(1)
+            else:
+                tags.append(0)
+    try:
+        assert len(tokens) == len(tags)
+    except AssertionError:
+        print(len(tokens), len(tags))
+        input()
+    current_token_index = 1
+    for i, token in enumerate(tokens):
+        if i != 0:
+            sub_tokens = tokenizer._tokenize(" " + token)
+        else:
+            sub_tokens = tokenizer._tokenize(token)
+
+        number = to_number(token)
+        if number is not None:
+            number_value.append(float(number))
+        else:
+            number_value.append(np.nan)
+        for sub_token in sub_tokens:
+            split_tags.append(tags[i])
+            split_tokens.append(sub_token)
+            paragraph_index.append(current_token_index)
+        current_token_index += 1
+        word_piece_mask += [1]
+        if len(sub_tokens) > 1:
+            word_piece_mask += [0] * (len(sub_tokens) - 1)
+    return split_tags
 
 def paragraph_test_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
     mapping_content = []
