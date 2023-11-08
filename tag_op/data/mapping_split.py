@@ -13,10 +13,20 @@ def find_table_mapping(number,table):
                     return [i,j]
             except:
                 continue
+    return None
 
 
 def find_ampping(number,table,paragraphs):
-    
+    tm = find_table_mapping(number,table)
+    if tm:
+        return {"table":[tm]}
+    else:
+        for p in paragraphs:
+            
+        para_number = to_number(paras[pid]["text"][mp[0]:mp[1]])
+        if abs(abs(number) - abs(para_number)) < 0.0001 or abs(abs(number) - abs(para_number)*0.01) < 0.0001:
+            temp_mapping["paragraph"] = {}
+            temp_mapping["paragraph"][p] = [mp]
 
 
 def split_mapping(operands,mapping,table,paras):
