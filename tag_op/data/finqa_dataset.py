@@ -251,7 +251,7 @@ def table_tagging(table, tokenizer, mapping):
     return table_tags
     
 
-def paragraph_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
+def paragraph_tokenize(question, paragraphs, tokenizer, mapping):
     paragraphs_copy = paragraphs.copy()
     paragraphs = {}
     for paragraph in paragraphs_copy:
@@ -989,15 +989,15 @@ class TagTaTQAReader(object):
                         if "paragraph" in opd2_mapping:
                             opd1_mapping["paragraph"] = opd2_mapping["paragraph"]
 
-                    temp_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping)
+                    temp_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
                     temp_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
                     ari_tags['table'].append(temp_table_tags)
                     ari_tags['para'].append(temp_para_tags)
                 else:
                     op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
-                    op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping)
+                    op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
                     op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
-                    op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping)
+                    op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
                     ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
                     ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
                     if "const" in opd1:
