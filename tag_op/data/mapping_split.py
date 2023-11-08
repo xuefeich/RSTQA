@@ -15,6 +15,10 @@ def find_table_mapping(number,table):
                 continue
 
 
+def find_ampping(number,table,paragraphs):
+    
+
+
 def split_mapping(operands,mapping,table,paras):
     temp_mapping = {}
     operand_one_mapping= {}
