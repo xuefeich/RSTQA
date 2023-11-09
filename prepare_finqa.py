@@ -16,14 +16,14 @@ parser.add_argument("--num_arithmetic_operators",type=int,default=6)
 args = parser.parse_args()
 
 if args.encoder == 'roberta':
-    from tag_op.data.tatqa_dataset import TagTaTQAReader, TagTaTQATestReader
+    from tag_op.data.finqa_dataset import TagTaTQAReader, TagTaTQATestReader
     tokenizer = RobertaTokenizer.from_pretrained(args.model_path + "/roberta.large")
     sep = '<s>'
     #tokenizer.add_special_tokens({'additional_special_tokens':['<OPT>','<STP>','<SUM>','<DIFF>','<DIVIDE>','<TIMES>','<AVERAGE>']})
     tokenizer.add_special_tokens({'additional_special_tokens':['<OPT>']})
 elif args.encoder == 'deberta':
     from transformers import DebertaV2Tokenizer
-    from tag_op.data.deberta_dataset import TagTaTQAReader, TagTaTQATestReader
+    from tag_op.data.finqa_dataset import TagTaTQAReader, TagTaTQATestReader
     tokenizer = DebertaV2Tokenizer.from_pretrained(args.model_path + "/deberta-v2-xlarge")
     tokenizer.add_special_tokens({'additional_special_tokens':['[OPT]']})
     sep = '[SEP]'
