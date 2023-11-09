@@ -772,7 +772,7 @@ class TagTaTQAReader(object):
             task = 0
             d = derivation.split("),")[0]
             [opd1,opd2] = d.split(",")
-            [op,opd1] = opd1.split("(")[0]
+            [op,opd1] = opd1.split("(")
             op = op.strip(" ")
             opd2 = opd2.strip(")")
             if "const" in opd1:
@@ -830,7 +830,7 @@ class TagTaTQAReader(object):
                 if i >= self.num_ops:
                     break
                 [opd1,opd2] = d.split(",")
-                [op,opd1] = opd1.split("(")[0]
+                [op,opd1] = opd1.split("(")
                 op = op.strip(" ")
                 ari_ops[i] = ARI_CLASSES_[op]
                 opd2 = opd2.strip(")")
