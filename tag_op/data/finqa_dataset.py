@@ -849,7 +849,7 @@ class TagTaTQAReader(object):
                     opd1_mapping = find_mapping(opd1,table,paragraphs)                                
                 
                 if "#" in opd2:
-                    j = int(opd2.strip("#"))
+                    j = int(opd2.strip(" ").strip("#"))
                     if op in ["add","multiply"]:
                         opt_labels[0,j,i-1] = 1
                     else:
