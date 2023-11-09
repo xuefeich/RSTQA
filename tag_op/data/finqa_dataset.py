@@ -721,9 +721,10 @@ class TagTaTQAReader(object):
                         print("extract err")  # if question_answer["uid"] in ignore_ids:
 
             ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
-            number_indexes  = const_indexes + number_indexes
-            const_labels = torch.from_numpy(np.array(const_labels)).unsqueeze(0)
-            ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 1)
+            if len(const_labels) > 0:
+               number_indexes  = const_indexes + number_indexes
+               const_labels = torch.from_numpy(np.array(const_labels)).unsqueeze(0)
+               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 1)
             if ari_sel_labels.shape[0] != len(number_indexes):
                 print(ari_sel_labels)
                 print(number_indexes)
