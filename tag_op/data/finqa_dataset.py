@@ -206,7 +206,7 @@ def string_tokenizer(string: str, tokenizer) -> List[int]:
     return ids
 
 
-def table_tokenize(table, tokenizer, mapping, answer_type):
+def table_tokenize(table, tokenizer):
     table_cell_tokens = []
     table_ids = []
     table_cell_index = []
@@ -250,60 +250,34 @@ def table_tagging(table, tokenizer, mapping):
     return table_tags
     
 
-def paragraph_tokenize(question, paragraphs, tokenizer, mapping):
+def paragraph_tokenize(question, paragraphs, tokenizer):
     paragraphs_copy = paragraphs.copy()
     paragraphs = {}
     for paragraph in paragraphs_copy:
         paragraphs[paragraph["order"]] = paragraph["text"]
     del paragraphs_copy
     split_tokens = []
-    split_tags = []
     number_mask = []
     number_value = []
     tokens = []
-    tags = []
     word_piece_mask = []
     paragraph_index = []
-
-    paragraph_mapping = False
-    paragraph_mapping_orders = []
-    if "paragraph" in list(mapping.keys()) and len(mapping["paragraph"].keys()) != 0:
-        paragraph_mapping = True
-        paragraph_mapping_orders = list(mapping["paragraph"].keys())
     # apply tf-idf to calculate text-similarity
     sorted_order = get_order_by_tf_idf(question, paragraphs)
     for order in sorted_order:
         text = paragraphs[order]
         prev_is_whitespace = True
-        answer_indexs = None
-        if paragraph_mapping and str(order) in paragraph_mapping_orders:
-            answer_indexs = mapping["paragraph"][str(order)]
-        current_tags = [0 for i in range(len(text))]
-        if answer_indexs is not None:
-            for answer_index in answer_indexs:
-                current_tags[answer_index[0]:answer_index[1]] = \
-                    [1 for i in range(len(current_tags[answer_index[0]:answer_index[1]]))]
-
         start_index = 0
         wait_add = False
         for i, c in enumerate(text):
             if is_whitespace(c):  # or c in ["-", "–", "~"]:
                 if wait_add:
-                    if 1 in current_tags[start_index:i]:
-                        tags.append(1)
-                    else:
-                        tags.append(0)
                     wait_add = False
                 prev_is_whitespace = True
             elif c in ["-", "–", "~"]:
                 if wait_add:
-                    if 1 in current_tags[start_index:i]:
-                        tags.append(1)
-                    else:
-                        tags.append(0)
                     wait_add = False
                 tokens.append(c)
-                tags.append(0)
                 prev_is_whitespace = True
             else:
                 if prev_is_whitespace:
@@ -313,12 +287,6 @@ def paragraph_tokenize(question, paragraphs, tokenizer, mapping):
                 else:
                     tokens[-1] += c
                 prev_is_whitespace = False
-        if wait_add:
-            if 1 in current_tags[start_index:len(text)]:
-                tags.append(1)
-            else:
-                tags.append(0)
-
     try:
         assert len(tokens) == len(tags)
     except AssertionError:
@@ -330,14 +298,12 @@ def paragraph_tokenize(question, paragraphs, tokenizer, mapping):
             sub_tokens = tokenizer._tokenize(" " + token)
         else:
             sub_tokens = tokenizer._tokenize(token)
-
         number = to_number(token)
         if number is not None:
             number_value.append(float(number))
         else:
             number_value.append(np.nan)
         for sub_token in sub_tokens:
-            split_tags.append(tags[i])
             split_tokens.append(sub_token)
             paragraph_index.append(current_token_index)
         current_token_index += 1
@@ -670,15 +636,6 @@ class TagTaTQAReader(object):
         self.op_skip = 0
         self.ari_skip = 0
         self.op_mode = op_mode
-        self.ari_ops = ARITHMETIC_CLASSES_
-        if ablation_mode == 0:
-            self.OPERATOR_CLASSES = OPERATOR_CLASSES_
-        elif ablation_mode == 1:
-            self.OPERATOR_CLASSES = get_op_1(op_mode)
-        elif ablation_mode == 2:
-            self.OPERATOR_CLASSES = get_op_2(op_mode)
-        else:
-            self.OPERATOR_CLASSES = get_op_3(op_mode)
 
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
@@ -1037,8 +994,6 @@ class TagTaTQATestReader(object):
         self.op_skip = 0
         self.mode = mode
         self.ari_skip = 0
-        self.ari_ops = ARITHMETIC_CLASSES_
-        self.OPERATOR_CLASSES = OPERATOR_CLASSES_
         self.num_ops = num_ari_ops
         self.op_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Arithmetic": 0, "Count": 0}
         self.scale_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
