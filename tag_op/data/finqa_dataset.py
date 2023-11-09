@@ -941,7 +941,7 @@ class TagTaTQAReader(object):
         tags = combine_tags(ari_round_tags,opd_two_tags)
 
         for const in const_list:
-            tags[0,const_dict[const]] = 1
+            tags[0,const_dict[int(const)]] = 1
         ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
         answer_dict = {"answer": answer}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
