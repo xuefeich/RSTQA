@@ -21,7 +21,7 @@ def find_mapping(number,table,paragraphs):
     if tm:
         return {"table":[tm]}
     else:
-        for pid in paragraphs:
+        for pid in range(len(paragraphs)):
             lp = len(paragraphs[pid]["text"])
             for mp1 in range(lp-1):
                 for mp2 in range(mp1,lp):
