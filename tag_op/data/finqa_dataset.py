@@ -13,8 +13,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 from .file_utils import is_scatter_available
 from tatqa_utils import *
-from .data_util import *
-from .data_util import _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, _is_times
+from .finqa_data_util import *
 from .derivation_split import infix_evaluator
 from .mapping_split import find_mapping
 
