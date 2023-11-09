@@ -287,11 +287,6 @@ def paragraph_tokenize(question, paragraphs, tokenizer):
                 else:
                     tokens[-1] += c
                 prev_is_whitespace = False
-    try:
-        assert len(tokens) == len(tags)
-    except AssertionError:
-        print(len(tokens), len(tags))
-        input()
     current_token_index = 1
     for i, token in enumerate(tokens):
         if i != 0:
