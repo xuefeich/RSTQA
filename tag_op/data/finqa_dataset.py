@@ -946,7 +946,7 @@ class TagTaTQAReader(object):
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                                    paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags,
                                    task,paragraph_tokens, table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask,
-                                   opt_index, opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes)
+                                   opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes)
 
     def _read(self, file_path: str):
         print("Reading file at %s", file_path)
