@@ -27,7 +27,7 @@ def find_mapping(number,table,paragraphs):
             for mp1 in range(lp-1):
                 for mp2 in range(mp1+1,lp):
                    para_number = to_number(paragraphs[pid]["text"][mp1:mp2])
-                   if para_number 
+                   if para_number:
                       if abs(abs(number) - abs(para_number)) < 0.0001 or abs(abs(number) - abs(para_number)*0.01) < 0.0001:
                          para_mapping = {}
                          para_mapping["paragraph"] = {}
