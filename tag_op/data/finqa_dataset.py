@@ -16,7 +16,7 @@ from tatqa_utils import *
 from .data_util import *
 from .data_util import _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, _is_times
 from .derivation_split import infix_evaluator
-from .mapping_split import split_mapping
+from .mapping_split import find_mapping
 
 const_dict = {1:1,2:2,3:3,4:4,5:5,100:6,1000:7,1000000:8}
 
@@ -652,15 +652,15 @@ def combine_tags(tags1, tags2):
 
 class TagTaTQAReader(object):
     def __init__(self, tokenizer,
-                 passage_length_limit: int = None, question_length_limit: int = None, sep="[SEP]", op_mode: int = 8,
+                 passage_length_limit: int = None, question_length_limit: int = None, sep="<s>", op_mode: int = 8,
                  ablation_mode: int = 0, num_ari_ops: int = 6):
         self.max_pieces = 512
         self.tokenizer = tokenizer
         self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer._convert_token_to_id(sep)
-        self.cls = self.tokenizer._convert_token_to_id("[CLS]")
-        self.opt = self.tokenizer._convert_token_to_id("[OPT]")
+        self.cls = self.tokenizer._convert_token_to_id("<s>")
+        self.opt = self.tokenizer._convert_token_to_id("<OPT>")
         self.const = []
         for const in list(const_dict.keys()):
             self.const.append(self.tokenizer._convert_token_to_id(str(const)))
@@ -683,14 +683,11 @@ class TagTaTQAReader(object):
 
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
-                       tags_ground_truth, operator_ground_truth, scale_ground_truth, paragraph_tokens,
+                       tags_ground_truth, operator_ground_truth, paragraph_tokens,
                        table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask, opt_labels,
-                       ari_labels, order_labels, question_mask):
+                       ari_labels, order_labels, question_mask,const_labels,const_indexes):
 
         if ari_ops != None:
-            ari_ops_padding = self.num_ops - len(ari_ops)
-            if ari_ops_padding > 0:
-                ari_ops += [0] * ari_ops_padding
             if ari_ops == [0] * self.num_ops:
                 print("no ari ops")
                 ari_ops = [-100] * self.num_ops
@@ -699,29 +696,27 @@ class TagTaTQAReader(object):
                 for i in range(self.num_ops):
                     if get0 == True:
                         ari_ops[i] = -100
+                        order_labels[i] = -100
                     if ari_ops[i] == 0:
+                        order_labels[i] = -100
                         if get0 == False:
                             get0 = True
         else:
             ari_ops = [-100] * self.num_ops
 
         if ari_ops == [-100] * self.num_ops:
-            # round_label = -100
             opt_labels[0, :, :] = -100
             ari_labels[0, :, :] = -100
-            order_labels[:] = -100
+            order_labels[1:] = -100
             number_indexes = []
             ari_sel_labels = []
             if ari_ops[1] == 0:
                 opt_labels[0, :, :] = -100
         else:
-            # round_label = self.num_ops - 1
             for i in range(1, self.num_ops - 1):
                 for j in range(i):
                     opt_labels[0, i, j] = -100
                 if ari_ops[i] == 0:
-                    # ari_ops[i] = -100
-                    # round_label = i
                     ari_labels[0, i:, :] = -100
                     opt_labels[0, i - 1:, :] = -100
                     opt_labels[0, :, i - 1:] = -100
@@ -775,24 +770,14 @@ class TagTaTQAReader(object):
                         print("extract err")  # if question_answer["uid"] in ignore_ids:
 
             ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
+            number_indexes  = const_indexes + number_indexes
+            const_labels = torch.from_numpy(np.array(const_labels)).unsqueeze(0)
+            ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 1)
             if ari_sel_labels.shape[0] != len(number_indexes):
                 print(ari_sel_labels)
                 print(number_indexes)
                 exit(0)
-
-            for i in range(self.num_ops):
-                if ari_ops[i] in [2, 4]:
-                    count = 0
-                    for sl in ari_sel_labels:
-                        if sl[i] == 1:
-                            count += 1
-                    if count != 2:
-                        order_labels[i] = -100
-                else:
-                    order_labels[i] = -100
-
         opt_id = torch.nonzero(opt_mask == 1)[0, 1]
-        # print(ari_ops)
 
         return {
             "input_ids": np.array(input_ids),
@@ -807,7 +792,6 @@ class TagTaTQAReader(object):
             "table_cell_index": np.array(table_cell_index),
             "tag_labels": np.array(tags_ground_truth),
             "operator_label": int(operator_ground_truth),
-            "scale_label": int(scale_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
             "answer_dict": answer_dict,
@@ -827,20 +811,77 @@ class TagTaTQAReader(object):
             paragraph_number_value, paragraph_index,sorted_order = paragraph_tokenize(question, paragraphs, self.tokenizer)
 
         order_labels = np.zeros(self.num_ops)
+        ari_ops = [0] * self.num_ops
         opt_labels = torch.zeros(1, self.num_ops - 1, self.num_ops - 1)
         ari_tags = {'table': [], 'para': []}
         const_list = []
         const_labels = []
-        
+        number_indexes = []
         if answer in ["yes","no"]:
-            task = "COMPARE"
+            task = 0
+            d = derivation.split("),")[0]
+            [opd1,opd2] = d.split(",")
+            [op,opd1] = opd1.split("(")[0]
+            op = op.strip(" ")
+            opd2 = opd2.strip(")")
+            if "const" in opd1:
+                if opd1 not in const_list:
+                    number_indexes.append([const_dict[int(opd1.strip("const_"))]])
+                    const_labels.append([0,0,0,0,0,0])
+                    const_labels[-1][i] = 1
+                    const_list.append(opd1)
+                else:
+                    const_labels[const_list.index(opd1)][i] = 1
+            else:
+                opd1_mapping = find_mapping(opd1,table,paragraphs)
+            if "const" in opd2:
+                if opd2 not in const_list:
+                    number_indexes.append([const_dict[int(opd2.strip("const_"))]])
+                    const_labels.append([0,0,0,0,0,0])
+                    const_labels[-1][i] = 1
+                    const_list.append(opd2)
+                else:
+                    const_labels[const_list.index(opd2)][i] = 1
+            else:
+                opd2_mapping = find_mapping(opd2,table,paragraphs)
+            op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
+            op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
+            op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
+            op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
+            ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
+            ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
+            if "const" in opd1:
+                if "const" in opd2:
+                    if int(opd1.strip("const_")) > int(opd2.strip("const_")):
+                        order_labels[i] = 1
+            elif "table" in opd1_mapping:
+                if "const" in opd2:
+                    order_labels[i] = 1
+                elif "table" in opd2_mapping:
+                    if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
+                        order_labels[i] = 1
+                    elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
+                        order_labels[i] = 1
+            elif "paragraph" in opd1_mapping:
+                if "paragraph" in opd2_mapping:
+                    opd1_pid = sorted_order.index(list(opd1_mapping["paragraph"].keys())[0])
+                    opd2_pid = sorted_order.index(list(opd2_mapping["paragraph"].keys())[0])
+                    if int(opd1_pid) > int(opd2_pid):
+                        order_labels[i] = 1
+                    elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][opd1_pid][0][0] > opd2_mapping["paragraph"][opd2_pid][0][0]:
+                        order_labels[i] = 1
+                else:
+                    order_labels[i] = 1
         else:
-            task = "ARITHMETIC"
+            task = 1
             dlist = derivation.split("),")
             for i,d in enumerate(dlist):
+                if i >= self.num_ops:
+                    break
                 [opd1,opd2] = d.split(",")
                 [op,opd1] = opd1.split("(")[0]
                 op = op.strip(" ")
+                ari_ops[i] = ARI_CLASSES_[op]
                 opd2 = opd2.strip(")")
                 if "#" in opd1:
                     j = int(opd1.strip("#"))
@@ -874,6 +915,7 @@ class TagTaTQAReader(object):
                     opd2_mapping = find_mapping(opd2,table,paragraphs)
 
                 if op in ["add", "multiply"]:
+                    order_labels[i] = -100
                     if "table" in opd1_mapping:
                         if "table" in opd2_mapping:
                             opd1_mapping["table"] += opd2_mapping["table"]
@@ -948,17 +990,12 @@ class TagTaTQAReader(object):
 
         for const in const_list:
             tags[0,const_dict[const]] = 1
-        
-        if answer_type == "arithmetic":
-            ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
-            
-        answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from}
+        ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
+        answer_dict = {"answer": answer}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                                    paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags,
-                                   operator_class, scale_class,
-                                   paragraph_tokens, table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask,
-                                   opt_index, opt_labels,
-                                   ari_round_labels, order_labels, question_mask)
+                                   task,paragraph_tokens, table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask,
+                                   opt_index, opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes)
 
     def _read(self, file_path: str):
         print("Reading file at %s", file_path)
