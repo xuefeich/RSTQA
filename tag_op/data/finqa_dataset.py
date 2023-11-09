@@ -778,7 +778,7 @@ class TagTaTQAReader(object):
             opd2 = opd2.strip(")")
             if "const" in opd1:
                 if opd1 not in const_list:
-                    number_indexes.append([const_dict[int(opd1.strip("const_"))]])
+                    number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]])
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
                     const_list.append(opd1)
@@ -788,7 +788,7 @@ class TagTaTQAReader(object):
                 opd1_mapping = find_mapping(opd1,table,paragraphs)
             if "const" in opd2:
                 if opd2 not in const_list:
-                    number_indexes.append([const_dict[int(opd2.strip("const_"))]])
+                    number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]])
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
                     const_list.append(opd2)
@@ -804,7 +804,7 @@ class TagTaTQAReader(object):
             ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
             if "const" in opd1:
                 if "const" in opd2:
-                    if int(opd1.strip("const_")) > int(opd2.strip("const_")):
+                    if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
                         order_labels[i] = 1
             elif "table" in opd1_mapping:
                 if "const" in opd2:
@@ -836,11 +836,11 @@ class TagTaTQAReader(object):
                 ari_ops[i] = ARI_CLASSES_[op]
                 opd2 = opd2.strip(")")
                 if "#" in opd1:
-                    j = int(opd1.strip("#"))
+                    j = int(opd1.strip(" ").strip("#"))
                     opt_labels[0,j,i-1] = 1
                 elif "const" in opd1:
                     if opd1 not in const_list:
-                        number_indexes.append([const_dict[int(opd1.strip("const_"))]])
+                        number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]])
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
                         const_list.append(opd1)
@@ -857,7 +857,7 @@ class TagTaTQAReader(object):
                         opt_labels[0, j, i - 1] = 2
                 elif "const" in opd2:
                     if opd2 not in const_list:
-                        number_indexes.append([const_dict[int(opd2.strip("const_"))]])
+                        number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]])
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
                         const_list.append(opd2)
