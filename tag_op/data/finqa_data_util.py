@@ -2,10 +2,7 @@ import numpy as np
 from tatqa_utils import to_number, is_number
 import re
 from enum import IntEnum
-
-# "SPAN-TABLE-TEXT": 2 has no data
-OPERATOR_CLASSES_ = {"SPAN-TEXT": 0, "SPAN-TABLE": 1, "MULTI_SPAN": 2,"COUNT":3,"ARITHMETIC":4}
-ARITHMETIC_CLASSES_ = {"STP":0,"SUM":1,"DIFF":2,"TIMES":3,"DIVIDE":4,"AVERAGE":5,"INC":6,"DEC":7}
+ARI_CLASSES_ = {"STP":0,"add":1,"substract":2,"multiply":3,"divide":4,"exp":5}
 
 def get_op_1(op_mode):
     if op_mode==1:
