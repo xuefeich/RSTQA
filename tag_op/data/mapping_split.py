@@ -16,7 +16,7 @@ def find_table_mapping(number,table):
     return None
 
 
-def find_ampping(number,table,paragraphs):
+def find_mapping(number,table,paragraphs):
     tm = find_table_mapping(number,table)
     if tm:
         return {"table":[tm]}
