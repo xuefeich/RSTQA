@@ -38,7 +38,7 @@ else:
     data_reader = TagTaTQAReader(tokenizer, args.passage_length_limit, args.question_length_limit, sep=sep,num_ari_ops = args.num_arithmetic_operators)
     data_mode = ["train"]
 
-data_format = "finqa_dataset_{}.json"
+data_format = "{}.json"
 print(f'==== NOTE ====: encoder:{args.encoder}, mode:{args.mode}')
 
 for dm in data_mode:
