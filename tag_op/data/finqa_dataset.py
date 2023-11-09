@@ -781,7 +781,7 @@ class TagTaTQAReader(object):
                     number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]])
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
-                    const_list.append(opd1)
+                    const_list.append(opd1.strip(" ").strip("const_"))
                 else:
                     const_labels[const_list.index(opd1)][i] = 1
             else:
@@ -791,7 +791,7 @@ class TagTaTQAReader(object):
                     number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]])
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
-                    const_list.append(opd2)
+                    const_list.append(opd2.strip(" ").strip("const_"))
                 else:
                     const_labels[const_list.index(opd2)][i] = 1
             else:
@@ -843,7 +843,7 @@ class TagTaTQAReader(object):
                         number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]])
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
-                        const_list.append(opd1)
+                        const_list.append(opd1.strip(" ").strip("const_"))
                     else:
                         const_labels[const_list.index(opd1)][i] = 1
                 else:
@@ -860,7 +860,7 @@ class TagTaTQAReader(object):
                         number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]])
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
-                        const_list.append(opd2)
+                        const_list.append(opd2.strip(" ").strip("const_"))
                     else:
                         const_labels[const_list.index(opd2)][i] = 1
                 else:
