@@ -898,7 +898,7 @@ class TagTaTQAReader(object):
                     ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
                     if "const" in opd1:
                        if "const" in opd2:
-                           if int(opd1.strip("const_")) > int(opd2.strip("const_")):
+                           if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
                                order_labels[i] = 1
                     elif "table" in opd1_mapping:
                         if "const" in opd2:
