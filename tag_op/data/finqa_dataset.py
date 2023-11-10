@@ -636,7 +636,7 @@ class TagTaTQAReader(object):
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
                        tags_ground_truth, operator_ground_truth, paragraph_tokens,
                        table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask, opt_labels,
-                       ari_labels, order_labels, question_mask,const_labels,const_indexes):
+                       ari_labels, order_labels, question_mask,const_labels,const_indexes,const_list):
 
         if ari_ops != None:
             if ari_ops == [0] * self.num_ops:
@@ -702,6 +702,13 @@ class TagTaTQAReader(object):
                         cur_indexes = [sel]
             number_indexes.append(cur_indexes)
             distinct_si = []
+
+            if len(const_labels) > 0:
+               number_indexes  = const_indexes + number_indexes
+               const_labels = torch.from_numpy(np.array(const_labels))
+               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
+               for const in const_list:
+                   tags_ground_truth[0,const_dict[int(const)]] = 1
             for i, ni in enumerate(number_indexes):
                 distinct_si.append(ni[0])
                 p = 10 - len(ni)
@@ -721,10 +728,7 @@ class TagTaTQAReader(object):
                         print("extract err")  # if question_answer["uid"] in ignore_ids:
 
             ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
-            if len(const_labels) > 0:
-               number_indexes  = const_indexes + number_indexes
-               const_labels = torch.from_numpy(np.array(const_labels))
-               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
+            
             if ari_sel_labels.shape[0] != len(number_indexes):
                 print(ari_sel_labels)
                 print(number_indexes)
@@ -939,15 +943,12 @@ class TagTaTQAReader(object):
                     self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags,self.const)
         
         tags = combine_tags(ari_round_tags,opd_two_tags)
-
-        for const in const_list:
-            tags[0,const_dict[int(const)]] = 1
         ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
         answer_dict = {"answer": answer}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                                    paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags,
                                    task,paragraph_tokens, table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask,
-                                   opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes)
+                                   opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes,const_list)
 
     def _read(self, file_path: str):
         print("Reading file at %s", file_path)
