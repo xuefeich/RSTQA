@@ -676,10 +676,6 @@ class TagTaTQAReader(object):
             cur_indexes = []
             cur = 0
             selected_indexes = torch.nonzero(tags_ground_truth[0]).squeeze(-1)
-
-            if len(selected_indexes) == 0:
-                print("no number")
-                return None
             for sel in selected_indexes:
                 sel = int(sel)
                 if int(table_cell_index[0, sel]) != 0:
@@ -702,13 +698,6 @@ class TagTaTQAReader(object):
                         cur_indexes = [sel]
             number_indexes.append(cur_indexes)
             distinct_si = []
-
-            if len(const_labels) > 0:
-               number_indexes  = const_indexes + number_indexes
-               const_labels = torch.from_numpy(np.array(const_labels))
-               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
-               for const in const_list:
-                   tags_ground_truth[0,const_dict[int(const)]] = 1
             for i, ni in enumerate(number_indexes):
                 distinct_si.append(ni[0])
                 p = 10 - len(ni)
@@ -728,7 +717,12 @@ class TagTaTQAReader(object):
                         print("extract err")  # if question_answer["uid"] in ignore_ids:
 
             ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
-            
+            if len(const_labels) > 0:
+               number_indexes  = const_indexes + number_indexes
+               const_labels = torch.from_numpy(np.array(const_labels))
+               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
+               for const in const_list:
+                   tags_ground_truth[0,const_dict[int(const)]] = 1
             if ari_sel_labels.shape[0] != len(number_indexes):
                 print(ari_sel_labels)
                 print(number_indexes)
@@ -782,7 +776,7 @@ class TagTaTQAReader(object):
             opd2 = opd2.strip(")")
             if "const" in opd1:
                 if opd1 not in const_list:
-                    number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]])
+                    number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]]+[0]*9)
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
                     const_list.append(opd1.strip(" ").strip("const_"))
@@ -792,7 +786,7 @@ class TagTaTQAReader(object):
                 opd1_mapping = find_mapping(opd1,table,paragraphs)
             if "const" in opd2:
                 if opd2 not in const_list:
-                    number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]])
+                    number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]]+[0]*9)
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
                     const_list.append(opd2.strip(" ").strip("const_"))
@@ -844,7 +838,7 @@ class TagTaTQAReader(object):
                     opt_labels[0,j,i-1] = 1
                 elif "const" in opd1:
                     if opd1 not in const_list:
-                        number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]])
+                        number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]]+[0]*9)
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
                         const_list.append(opd1.strip(" ").strip("const_"))
@@ -861,7 +855,7 @@ class TagTaTQAReader(object):
                         opt_labels[0, j, i - 1] = 2
                 elif "const" in opd2:
                     if opd2 not in const_list:
-                        number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]])
+                        number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]]+[0]*9)
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
                         const_list.append(opd2.strip(" ").strip("const_"))
