@@ -196,7 +196,6 @@ class TagopModel(nn.Module):
                 token_type_ids: torch.LongTensor,
                 paragraph_mask: torch.LongTensor,
                 paragraph_index: torch.LongTensor,
-                question_index: torch.LongTensor,
                 opt_mask : torch.LongTensor,
                 tag_labels: torch.LongTensor,
                 task_labels: torch.LongTensor,
@@ -323,20 +322,17 @@ class TagopModel(nn.Module):
                 token_type_ids,
                 paragraph_mask,
                 paragraph_index,
-                tag_labels,
                 gold_answers,
                 paragraph_tokens,
                 paragraph_numbers,
                 table_cell_numbers,
-                question_index,
-                question_numbers,
                 question_ids,
                 opt_mask,
+                col_index,
                 position_ids=None,
                 mode=None,
                 epoch=None,
                 table_mask=None,
-                question_mask = None,
                 table_cell_index=None,
                 table_cell_tokens=None,
                 table_mapping_content=None,
@@ -357,12 +353,6 @@ class TagopModel(nn.Module):
         opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
         for bsz in range(batch_size):
             opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
-
-        question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
-        question_tag_prediction = self.tag_predictor(question_output)
-        question_tag_prediction = util.masked_log_softmax(question_tag_prediction, mask=None)
-        question_tag_prediction = util.replace_masked_values(question_tag_prediction, table_mask.unsqueeze(-1), 0)
-        question_tag_labels = util.replace_masked_values(tag_labels.float(), question_mask, 0)
         
         table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
         table_tag_prediction = self.tag_predictor(table_sequence_output)
@@ -375,28 +365,16 @@ class TagopModel(nn.Module):
         paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
-        
-        question_reduce_mean = torch.mean(question_output, dim=1)
-        counter_prediction = self.if_predictor(question_reduce_mean)
-        pred_counter_class = torch.argmax(counter_prediction,dim = -1)
-        
-        paragraph_reduce_mean = torch.mean(paragraph_sequence_output, dim=1)
-        table_reduce_mean = torch.mean(table_sequence_output, dim=1)
 
-        op_output = torch.cat((question_reduce_mean, table_reduce_mean, paragraph_reduce_mean), dim=-1)
-        operator_prediction = self.operator_predictor(op_output)
+        const_output = sequence_output[:,1:10,:]
+        const_tag_prediction = self.tag_predictor(const_output)
+        const_tag_prediction = util.masked_log_softmax(const_tag_prediction, mask=None)
 
-        scale_prediction = self.scale_predictor(cls_output)
-        predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
-
-        q = torch.mean(torch.cat((question_reduce_mean.unsqueeze(1),paragraph_reduce_mean.unsqueeze(1),table_reduce_mean.unsqueeze(1)),dim = 1),dim = 1).unsqueeze(1).expand(opt_output.shape)
-        ari_ops_prediction = self.ari_predictor(q,opt_output)
+        task_prediction = self.task_predictor(cls_output)
+        predicted_task_class = torch.argmax(task_prediction, dim=-1)
+        ari_ops_prediction = self.operator_predictor(opt_output)
         pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
 
-        question_tag_prediction_score = question_tag_prediction[:, :, 1]
-        question_token_tag_prediction_score = reduce_max_index(question_tag_prediction_score, question_index).detach().cpu().numpy()
-        question_tag_prediction_argmax = torch.argmax(question_tag_prediction, dim=-1).float()
-        question_token_tag_prediction = reduce_mean_index(question_tag_prediction_argmax, question_index).detach().cpu().numpy()
         paragraph_tag_prediction_score = paragraph_tag_prediction[:, :, 1]
         paragraph_token_tag_prediction_score = reduce_max_index(paragraph_tag_prediction_score, paragraph_index).detach().cpu().numpy()
         paragraph_tag_prediction_argmax = torch.argmax(paragraph_tag_prediction, dim=-1).float()
@@ -406,24 +384,17 @@ class TagopModel(nn.Module):
         table_tag_prediction_argmax = torch.argmax(table_tag_prediction, dim=-1).float()
         table_cell_tag_prediction = reduce_mean_index(table_tag_prediction_argmax, table_cell_index).detach().cpu().numpy()
 
+                    
         selected_numbers_output = torch.zeros([200 , self.num_ops, 2*self.hidden_size],device = device)
         number_indexes_batch = np.zeros([200 , 2])
-
         selected_numbers_batch = []
-
         num_numbers = 0
-
         pred_ari_class = pred_ari_class.detach().cpu().numpy()
-
-        predicted_scale_class = torch.argmax(scale_prediction, dim=-1).detach().cpu().numpy()
-
+        
         output_dict = {}
         output_dict["question_id"] = []
         output_dict["answer"] = []
-        output_dict["scale"] = []
         output_dict["gold_answers"] = []
-        output_dict["pred_span"] = []
-        output_dict["gold_span"] = []
 
         operand_prediction = torch.zeros([80,self.num_ops,2],device = device)
         scores = torch.zeros([batch_size,self.num_ops,2],device = device)
@@ -439,11 +410,6 @@ class TagopModel(nn.Module):
         pred_order = torch.zeros([batch_size,self.num_ops],device = device)
 
         for bsz in range(batch_size):
-            if pred_counter_class[bsz] == 1:
-                question_sel_indexes , question_selected_numbers = get_number_index_from_reduce_sequence(question_token_tag_prediction[bsz],question_numbers[bsz])
-            else:
-                question_sel_indexes = []
-                question_selected_numbers = []
             para_sel_indexes , paragraph_selected_numbers = get_number_index_from_reduce_sequence(paragraph_token_tag_prediction[bsz],paragraph_numbers[bsz])
             table_sel_indexes , table_selected_numbers = get_number_index_from_reduce_sequence(table_cell_tag_prediction[bsz], table_cell_numbers[bsz])
             selected_numbers = question_selected_numbers + paragraph_selected_numbers + table_selected_numbers
