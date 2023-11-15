@@ -614,7 +614,7 @@ def combine_tags(tags1, tags2):
     return whole_tags
 
 
-class TagTaTQAReader(object):
+class FinqaTrainReader(object):
     def __init__(self, tokenizer,
                  passage_length_limit: int = None, question_length_limit: int = None, sep="<s>", op_mode: int = 8,
                  ablation_mode: int = 0, num_ari_ops: int = 6):
@@ -1049,311 +1049,440 @@ class TagTaTQAReader(object):
         return instances
 
 
-class TagTaTQATestReader(object):
+class FinqaTestReader(object):
     def __init__(self, tokenizer,
-                 passage_length_limit: int = None, question_length_limit: int = None, sep="<s>",
-                 ablation_mode=0, op_mode=0, num_ari_ops=6, mode="dev"):
+                 passage_length_limit: int = None, question_length_limit: int = None, sep="<s>", op_mode: int = 8,
+                 ablation_mode: int = 0, num_ari_ops: int = 6):
         self.max_pieces = 512
         self.tokenizer = tokenizer
         self.passage_length_limit = passage_length_limit
         self.question_length_limit = question_length_limit
         self.sep = self.tokenizer._convert_token_to_id(sep)
-        self.cls = self.tokenizer._convert_token_to_id("[CLS]")
-        self.opt = self.tokenizer._convert_token_to_id("[OPT]")
+        self.cls = self.tokenizer._convert_token_to_id("<s>")
+        self.opt = self.tokenizer._convert_token_to_id("<OPT>")
+        self.const = []
+        for const in list(const_dict.keys()):
+            self.const.append(self.tokenizer._convert_token_to_id(str(const)))
+                     
+        self.num_ops = num_ari_ops
         tokens = self.tokenizer._tokenize("Feb 2 Nov")
         self.skip_count = 0
         self.op_skip = 0
-        self.mode = mode
         self.ari_skip = 0
-        self.num_ops = num_ari_ops
-        self.op_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Arithmetic": 0, "Count": 0}
-        self.scale_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
+        self.op_mode = op_mode
 
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
-                       tags_ground_truth, paragraph_tokens, table_cell_tokens, answer_dict, question_id, opt_mask,
-                       opt_index, derivation, question_mask):
+                       tags_ground_truth, operator_ground_truth, paragraph_tokens,
+                       table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask, opt_labels,
+                       ari_labels, order_labels, question_mask,const_labels,const_indexes,const_list,col_index):
 
+        if ari_ops != None:
+            if ari_ops == [0] * self.num_ops:
+                print("no ari ops")
+                ari_ops = [-100] * self.num_ops
+            else:
+                get0 = False
+                for i in range(self.num_ops):
+                    if get0 == True:
+                        ari_ops[i] = -100
+                        order_labels[i] = -100
+                    if ari_ops[i] == 0:
+                        order_labels[i] = -100
+                        if get0 == False:
+                            get0 = True
+        else:
+            ari_ops = [-100] * self.num_ops
+
+        if ari_ops == [-100] * self.num_ops:
+            opt_labels[0, :, :] = -100
+            ari_labels[0, :, :] = -100
+            order_labels[1:] = -100
+            number_indexes = []
+            ari_sel_labels = []
+            if ari_ops[1] == 0:
+                opt_labels[0, :, :] = -100
+        else:
+            for i in range(1, self.num_ops - 1):
+                for j in range(i):
+                    opt_labels[0, i, j] = -100
+                if ari_ops[i] == 0:
+                    ari_labels[0, i:, :] = -100
+                    opt_labels[0, i - 1:, :] = -100
+                    opt_labels[0, :, i - 1:] = -100
+
+            number_indexes = []
+            cur_indexes = []
+            cur = 0
+            selected_indexes = torch.nonzero(tags_ground_truth[0]).squeeze(-1)
+            if len(selected_indexes) == 0:
+                print("no number")
+                return None
+            for sel in selected_indexes:
+                sel = int(sel)
+                if int(table_cell_index[0, sel]) != 0:
+                    if int(table_cell_index[0, sel]) == cur or cur_indexes == []:
+                        if cur_indexes == []:
+                            cur = int(table_cell_index[0, sel])
+                        cur_indexes.append(sel)
+                    else:
+                        cur = int(table_cell_index[0, sel])
+                        number_indexes.append(cur_indexes)
+                        cur_indexes = [sel]
+                else:
+                    if int(paragraph_index[0, sel]) == cur or cur_indexes == []:
+                        if cur_indexes == []:
+                            cur = int(paragraph_index[0, sel])
+                        cur_indexes.append(sel)
+                    else:
+                        cur = int(paragraph_index[0, sel])
+                        number_indexes.append(cur_indexes)
+                        cur_indexes = [sel]
+            number_indexes.append(cur_indexes)
+            distinct_si = []
+            for i, ni in enumerate(number_indexes):
+                distinct_si.append(ni[0])
+                p = 10 - len(ni)
+                if p > 0:
+                    number_indexes[i] += [0] * p
+                else:
+                    number_indexes[i] = number_indexes[i][:10]
+                    print("long number")
+                    print(ni)
+                    print(table_cell_index[0, ni])
+                    print(paragraph_index[0, ni])
+                    if int(table_cell_index[0, ni[0]]) != 0:
+                        print(table_cell_number_value[int(table_cell_index[0, ni[0]]) - 1])
+                    elif int(paragraph_index[0, ni[0]]) != 0:
+                        print(paragraph_number_value[int(paragraph_index[0, ni[0]]) - 1])
+                    else:
+                        print("extract err")  # if question_answer["uid"] in ignore_ids:
+
+            ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
+            if len(const_labels) > 0:
+               number_indexes  = const_indexes + number_indexes
+               const_labels = torch.from_numpy(np.array(const_labels))
+               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
+               for const in const_list:
+                   tags_ground_truth[0,const_dict[int(const)]] = 1
+            if ari_sel_labels.shape[0] != len(number_indexes):
+                print(ari_sel_labels)
+                print(number_indexes)
+                exit(0)
         opt_id = torch.nonzero(opt_mask == 1)[0, 1]
-        # opt_indexes = torch.zeros([1,self.num_ops,1024])
-        # for i in range(self.num_ops):
-        #    j = opt_id + i
-        #    opt_indexes[0,i,:] = j
+
         return {
             "input_ids": np.array(input_ids),
             "attention_mask": np.array(attention_mask),
             "token_type_ids": np.array(token_type_ids),
             "paragraph_mask": np.array(paragraph_mask),
             "table_mask": np.array(table_mask),
+            "question_mask": np.array(question_mask),
             "paragraph_number_value": np.array(paragraph_number_value),
             "table_cell_number_value": np.array(table_cell_number_value),
+            "col_index" : np.array(col_index),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
             "tag_labels": np.array(tags_ground_truth),
+            "operator_label": int(operator_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
             "answer_dict": answer_dict,
             "question_id": question_id,
-            # "opt_index" : opt_indexes,
-            # "ari_ops" : torch.LongTensor(ari_ops),
+            "ari_ops": torch.LongTensor(ari_ops),
             "opt_mask": opt_id,
-            "derivation": derivation,
-            "question_mask": np.array(question_mask),
-            # "truth_numbers":truth_numbers
-            # "opt_index":torch.LongTensor(np.array(opt_index))
+            "order_labels": torch.LongTensor(order_labels),
+            "ari_labels": torch.LongTensor(np.array(ari_sel_labels)),
+            "selected_indexes": np.array(number_indexes),
+            "opt_labels": torch.LongTensor(np.array(opt_labels)),
         }
 
-    def summerize_op(self, derivation, answer_type, facts, answer, answer_mapping, scale, tv, pv):
-        truth_numbers = []
-        order_labels = [-100] * self.num_ops
-        if answer_type == "span":
-            if "table" in answer_mapping.keys():
-                self.op_count["Cell-in-table"] += 1
-                return ["Cell-in-table"] + ["ignore"] * (self.num_ops - 1), truth_numbers, order_labels
-            elif "paragraph" in answer_mapping.keys():
-                self.op_count["Span-in-text"] += 1
-                return ["Span-in-text"] + ["ignore"] * (self.num_ops - 1), truth_numbers, order_labels
-        elif answer_type == "multi-span":
-            self.op_count["Spans"] += 1
-            return ["Spans"] + ["ignore"] * (self.num_ops - 1), truth_numbers, order_labels
-        elif answer_type == "count":
-            self.op_count["Count"] += 1
-            return ["Count"] + ["ignore"] * (self.num_ops - 1), truth_numbers, order_labels
-        elif answer_type == "arithmetic":
-            num_facts = facts_to_nums(facts)
-            if not is_number(str(answer)):
-                return "", truth_numbers
-            else:
-                self.op_count["Arithmetic"] += 1
-                isavg = 0
-                try:
-                    if _is_average(num_facts, answer):
-                        operator_classes = ["Average"] + ["Stop"] + ["ignore"] * (self.num_ops - 2)
-                        isavg = 1
-                except:
-                    isavg = 0
-                if isavg == 0:
-                    dvt_split_suc = 0
-                    try:
-                        ari_operations = infix_evaluator(derivation)
-                        # print(len(ari_operations))
-                        for ari in ari_operations:
-                            for num in ari[1:]:
-                                if not isinstance(num, str):
-                                    if num not in truth_numbers:
-                                        truth_numbers.append(num)
-                        dvt_split_suc = 1
-                        if len(ari_operations) > self.num_ops:
-                            operator_classes = None
-                            dvt_split_suc = 0
-                    except:
-                        print(derivation)
-                        operator_classes = None
-                    if dvt_split_suc == 1:
-                        operator_classes = ["ignore"] * self.num_ops
-                        for i, ari in enumerate(ari_operations):
-                            if ari[0] == "SUM":
-                                operator_classes[i] = "Sum"
-                            if ari[0] == "DIFF":
-                                operator_classes[i] = "Difference"
-                                opd1 = -100
-                                opd2 = -100
-                                tl = len(tv)
-                                pl = len(pv)
-                                for o in range(tl + pl):
-                                    if isinstance(ari[1], str) or isinstance(ari[2], str):
-                                        break
-                                    if o < tl:
-                                        if tv[o] == ari[1]:
-                                            opd1 = o
-                                        if tv[o] == ari[2]:
-                                            opd2 = o
-                                    else:
-                                        if pv[o - tl] == ari[1]:
-                                            opd1 = o
-                                        if pv[o - tl] == ari[2]:
-                                            opd2 = o
-                                if opd1 == -100 or opd2 == -100:
-                                    print("order fail")
-                                    order_labels[i] = -100
-                                else:
-                                    if opd1 <= opd2:
-                                        order_labels[i] = 0
-                                    else:
-                                        order_labels[i] = 1
-                            if ari[0] == "TIMES":
-                                operator_classes[i] = "Multiplication"
-                            if ari[0] == "DIVIDE":
-                                operator_classes[i] = "Division"
-                                opd1 = -100
-                                opd2 = -100
-                                tl = len(tv)
-                                pl = len(pv)
-                                for o in range(tl + pl):
-                                    if isinstance(ari[1], str) or isinstance(ari[2], str):
-                                        break
-                                    if o < tl:
-                                        if tv[o] == ari[1]:
-                                            opd1 = o
-                                        if tv[o] == ari[2]:
-                                            opd2 = o
-                                    else:
-                                        if pv[o - tl] == ari[1]:
-                                            opd1 = o
-                                        if pv[o - tl] == ari[2]:
-                                            opd2 = o
-                                if opd1 == -100 or opd2 == -100:
-                                    print("order fail")
-                                    order_labels[i] = -100
-                                else:
-                                    if opd1 <= opd2:
-                                        order_labels[i] = 0
-                                    else:
-                                        order_labels[i] = 1
-                            if ari[0] == "AVERAGE":
-                                operator_classes[i] = "Average"
-                            j = i
-                        # print(j)
-                        if j < self.num_ops - 1:
-                            operator_classes[j + 1] = "Stop"
-                    else:
-                        operator_classes = None
-
-            return operator_classes, truth_numbers, order_labels
-
-    def _to_test_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
-                          answer_type: str, answer: str, answer_mapping, scale: str, question_id: str, derivation,
-                          facts):
+    def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer: str, derivation: str,question_id: str):
         question_text = question.strip()
+        table_cell_tokens, table_ids,table_cell_number_value, table_cell_index,col_index = table_tokenize(table, self.tokenizer)
+        paragraph_tokens, paragraph_ids,  paragraph_word_piece_mask, paragraph_number_mask, \
+            paragraph_number_value, paragraph_index,sorted_order = paragraph_tokenize(question, paragraphs, self.tokenizer)
 
-        '''
-        if self.mode == "dev":
-            gold_ops,truth_numbers = self.summerize_op(derivation, answer_type, facts, answer, answer_mapping, scale)
-            if gold_ops is None:
-                gold_ops = ["ignore"] *self.num_ops
-        '''
+        order_labels = np.zeros(self.num_ops)
+        ari_ops = [0] * self.num_ops
+        opt_labels = torch.zeros(1, self.num_ops - 1, self.num_ops - 1)
+        ari_tags = {'table': [], 'para': []}
+        const_keys = list(const_dict.keys())
+        const_list = []
+        const_labels = []
+        number_indexes = []
+        if answer in ["yes","no"]:
+            task = 0
+            d = derivation.split("),")[0]
+            [opd1,opd2] = d.split(",")
+            [op,opd1] = opd1.split("(")
+            op = op.strip(" ")
+            opd2 = opd2.strip(")")
+            n1 = False
+            n2 = False
+            if "const" in opd1:
+                try:
+                   opd1n = int(opd1.strip(" ").strip("const_"))
+                except:
+                   return None
+                if opd1n not in const_keys:
+                   return None
+                if opd1n not in const_list:
+                    number_indexes.append([const_dict[opd1n]]+[0]*9)
+                    const_labels.append([0,0,0,0,0,0])
+                    const_labels[-1][i] = 1
+                    const_list.append(opd1n)
+                else:
+                    const_labels[const_list.index(opd1n)][i] = 1
+            else:
+                n1 = True
+                opd1_mapping = find_mapping(opd1,table,paragraphs)
+                if opd1_mapping is None:
+                  return None
+            if "const" in opd2:
+                try:
+                   opd2n = int(opd2.strip(" ").strip("const_"))
+                except:
+                   return None
+                if opd2n not in const_keys:
+                   return None
+                if opd2n not in const_list:
+                    number_indexes.append([const_dict[opd2n]]+[0]*9)
+                    const_labels.append([0,0,0,0,0,0])
+                    const_labels[-1][i] = 1
+                    const_list.append(opd2n)
+                else:
+                    const_labels[const_list.index(opd2n)][i] = 1
+            else:
+                n2 = True
+                opd2_mapping = find_mapping(opd2,table,paragraphs)
+                if opd2_mapping is None:
+                  return None
+            op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
+            op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
+            op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
+            op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
+            ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
+            ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
+            if "const" in opd1:
+                if "const" in opd2:
+                    if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
+                        order_labels[0] = 1
+            elif n1 and "table" in opd1_mapping:
+                if "const" in opd2:
+                    order_labels[0] = 1
+                elif n2 and "table" in opd2_mapping:
+                    if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
+                        order_labels[0] = 1
+                    elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
+                        order_labels[0] = 1
+            elif n1 and "paragraph" in opd1_mapping:
+                if n2 and "paragraph" in opd2_mapping:
+                    opd1_pid = sorted_order.index(list(opd1_mapping["paragraph"].keys())[0])
+                    opd2_pid = sorted_order.index(list(opd2_mapping["paragraph"].keys())[0])
+                    if int(opd1_pid) > int(opd2_pid):
+                        order_labels[0] = 1
+                    elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][opd1_pid][0][0] > opd2_mapping["paragraph"][opd2_pid][0][0]:
+                        order_labels[0] = 1
+                else:
+                    order_labels[0] = 1
+        else:
+            task = 1
+            dlist = derivation.split("),")
+            for i,d in enumerate(dlist):
+                if i >= self.num_ops:
+                    break
+                [opd1,opd2] = d.split(",")
+                [op,opd1] = opd1.split("(")
+                op = op.strip(" ")
+                ari_ops[i] = ARI_CLASSES_[op]
+                
+                if "table_" in op:
+                   for i in range(len(table)):
+                      cell = table[i][0]
+                      if opd1.strip(" ") in cell:
+                         temp_table_tags = table_tagging(table, self.tokenizer, {"table":[[i,0]]})
+                         ari_tags['table'].append(temp_table_tags)
+                         ari_tags['para'].append([0]*512)
+                         break
+                   continue
 
-        table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
-            table_test_tokenize(table, self.tokenizer, answer_mapping, answer_type)
+                opd2 = opd2.strip(")")
+                n1 = False
+                n2 = False
+                if "#" in opd1:
+                    j = int(opd1.strip(" ").strip("#"))
+                    if j > 5:
+                      return None
+                    opt_labels[0,j,i-1] = 1
+                elif "const" in opd1:
+                    try:
+                       opd1n = int(opd1.strip(" ").strip("const_"))
+                    except:
+                       return None
+                    if opd1n not in const_keys:
+                        return None
+                    if opd1n not in const_list:
+                        number_indexes.append([const_dict[opd1n]]+[0]*9)
+                        const_labels.append([0,0,0,0,0,0])
+                        const_labels[-1][i] = 1
+                        const_list.append(opd1n)
+                    else:
+                        const_labels[const_list.index(opd1n)][i] = 1
+                else:
+                    n1 = True
+                    opd1_mapping = find_mapping(opd1,table,paragraphs)                                
+                    if opd1_mapping is None:
+                       return None
+                if "#" in opd2:
+                    j = int(opd2.strip(" ").strip("#"))
+                    if j > 5:
+                      return None
+                    if op in ["add","multiply"]:
+                        opt_labels[0,j,i-1] = 1
+                    else:
+                        opt_labels[0, j, i - 1] = 2
+                elif "const" in opd2:
+                    try:
+                       opd2n = int(opd2.strip(" ").strip("const_"))
+                    except:
+                       return None
+                    if opd2n not in const_keys:
+                        return None
+                    if opd2n not in const_list:
+                        number_indexes.append([const_dict[opd2n]]+[0]*9)
+                        const_labels.append([0,0,0,0,0,0])
+                        const_labels[-1][i] = 1
+                        const_list.append(opd2n)
+                    else:
+                        const_labels[const_list.index(opd2n)][i] = 1
+                else:
+                    n2 = True
+                    opd2_mapping = find_mapping(opd2,table,paragraphs)
+                    if opd2_mapping is None:
+                       return None
+                if op in ["add", "multiply"]:
+                    order_labels[i] = -100
+                    if n1 and "table" in opd1_mapping:
+                        if n2 and "table" in opd2_mapping:
+                            opd1_mapping["table"] += opd2_mapping["table"]
+                    elif n1:
+                        if n2 and "table" in opd2_mapping:
+                            opd1_mapping["table"] = opd2_mapping["table"]
+                    elif n2 and "table" in opd2_mapping:
+                       opd1_mapping = opd2_mapping
+                    if n1 and "paragraph" in opd1_mapping:
+                        if n2 and "paragraph" in opd2_mapping:
+                            pid = list(opd2_mapping["paragraph"].keys())[0]
+                            if pid in opd1_mapping["paragraph"]:
+                                opd1_mapping["paragraph"][pid] += opd2_mapping["paragraph"][pid]
+                            else:
+                                opd1_mapping["paragraph"][pid] = opd2_mapping["paragraph"][pid]
+                    elif n1:
+                        if n2 and "paragraph" in opd2_mapping:
+                            opd1_mapping["paragraph"] = opd2_mapping["paragraph"]
+                    elif n2 and "paragraph" in opd2_mapping:
+                         opd1_mapping = opd2_mapping
 
-        paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
-            paragraph_number_value, paragraph_index, paragraph_mapping_content = \
-            paragraph_test_tokenize(question, paragraphs, self.tokenizer, answer_mapping, answer_type)
+                    if n1 or n2:
+                        temp_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
+                        temp_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
+                        ari_tags['table'].append(temp_table_tags)
+                        ari_tags['para'].append(temp_para_tags)
+                    else:
+                        return None
+                else:
+                    op1_table_tags = [0]*512
+                    op2_table_tags = [0]*512
+                    op1_para_tags = [0]*512
+                    op2_para_tags = [0]*512
+                    if n1:
+                       op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
+                       op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
+                    if n2:
+                       op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
+                       op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
+                    ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
+                    ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
+                    if "const" in opd1:
+                       if "const" in opd2:
+                           if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
+                               order_labels[i] = 1
+                    elif n1 and "table" in opd1_mapping:
+                        if "const" in opd2:
+                            order_labels[i] = 1
+                        elif n2 and "table" in opd2_mapping:
+                            if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
+                                order_labels[i] = 1
+                            elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
+                                order_labels[i] = 1
+                    elif n1 and "paragraph" in opd1_mapping:
+                        if n2 and "paragraph" in opd2_mapping:
+                            pid1 = list(opd1_mapping["paragraph"].keys())[0]
+                            pid2 = list(opd2_mapping["paragraph"].keys())[0]
+                            opd1_pid = sorted_order.index(pid1)
+                            opd2_pid = sorted_order.index(pid2)
+                            if int(opd1_pid) > int(opd2_pid):
+                                order_labels[i] = 1
+                            elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][pid1][0][0] > opd2_mapping["paragraph"][pid2][0][0]:
+                                order_labels[i] = 1
+                        else:
+                            order_labels[i] = 1
+        
+        for i in range(len(table)):
+            for j in range(len(table[i])):
+                if table[i][j] == '' or table[i][j] == 'N/A' or table[i][j] == 'n/a':
+                    table[i][j] = "NONE"
+        table = pd.DataFrame(table, dtype=np.str_)
+        column_relation = {}
+        for column_name in table.columns.values.tolist():
+            column_relation[column_name] = str(column_name)
+        table.rename(columns=column_relation, inplace=True)
 
-        if self.mode == "dev":
-            gold_ops, truth_numbers, order_labels = self.summerize_op(derivation, answer_type, facts, answer,
-                                                                      answer_mapping, scale, table_cell_number_value,
-                                                                      paragraph_number_value)
-            if gold_ops is None:
-                gold_ops = ["ignore"] * self.num_ops
         question_ids = question_tokenizer(question_text, self.tokenizer)
 
         input_ids, attention_mask, paragraph_mask, paragraph_index, \
-            table_mask, table_index, tags, token_type_ids, opt_mask, opt_index, question_mask = \
-            _test_concat(question_ids, table_ids, table_tags, table_cell_index,
-                         paragraph_ids, paragraph_tags, paragraph_index, self.cls,
-                         self.sep, self.opt, self.question_length_limit,
-                         self.passage_length_limit, self.max_pieces, self.num_ops)
+            table_mask, table_index, token_type_ids, opt_mask, opt_index, ari_round_tags, opd_two_tags, ari_round_labels, question_mask = \
+            _concat(question_ids, table_ids, table_cell_index,
+                    paragraph_ids, paragraph_index, self.cls,
+                    self.sep, self.opt, self.question_length_limit,
+                    self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags,self.const)
+        
+        tags = combine_tags(ari_round_tags,opd_two_tags)
 
-        if self.mode == "test":
-            gold_ops = None
-            scale = None
-            order_labels = None
-        else:
-            self.scale_count[scale] += 1
-        answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from,
-                       "gold_ops": gold_ops, "gold_scale": scale, "order_labels": order_labels}
-
+        ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
+        answer_dict = {"answer": answer}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                                    paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags,
-                                   paragraph_tokens,
-                                   table_cell_tokens, answer_dict, question_id, opt_mask, opt_index, derivation,
-                                   question_mask)
+                                   task,paragraph_tokens, table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask,
+                                   opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes,const_list,col_index)
 
     def _read(self, file_path: str):
         print("Reading file at %s", file_path)
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
             dataset_file.close()
-        # f = open("3round_dev.json",'w')
-        print("Reading the tatqa dataset")
         instances = []
-        maxround_instances = []
-        index_error_count = 0
-        assert_error_count = 0
         for one in tqdm(dataset):
-            table = one['table']['table']
-            paragraphs = one['paragraphs']
-            questions = one['questions']
-            for question_answer in questions:
-                question = question_answer["question"].strip()
-                if self.mode == "dev":
-                    answer_type = question_answer["answer_type"]
-                    answer = question_answer["answer"]
-                    answer_from = question_answer["answer_from"]
-                    answer_mapping = question_answer["mapping"]
-                    scale = question_answer["scale"]
-                    derivation = question_answer['derivation']
-                    facts = question_answer['facts']
-                else:
-                    answer_type = None
-                    answer = None
-                    answer_from = None
-                    answer_mapping = None
-                    scale = None
-                    derivation = None
-                    facts = None
-                instance = self._to_test_instance(question, table, paragraphs, answer_from, answer_type, answer,
-                                                  answer_mapping, scale, question_answer["uid"], derivation, facts)
-                # if instance is not None and "ignore" not in instance["answer_dict"]["gold_ops"][:3] and "Stop" not in instance["answer_dict"]["gold_ops"][:3]:
-                if instance is not None:
-                    instances.append(instance)
-                    # if answer_type == "arithmetic":
-                    # if question_answer["uid"] in ignore_ids:
-                    #   print("ignore sample")
-                    #   ignore_instances.append(instance)
-                    # elif derivation.count('+')+derivation.count('-')+derivation.count('*')+derivation.count('/') == 1:
-                    # elif instance["answer_dict"]["gold_ops"][1] == "Stop" and instance["answer_dict"]["gold_ops"][0] in ["Sum","Difference","Multiplication","Division"]:
-                    #   simple_instances.append(instance)
-                    # else:
-                    #   instances.append(instance)
+            table = one['table_ori']
+            paragraphs = one['pre_text'] + one["post_text"]
+            para_dicts = []
+            for od, p in enumerate(paragraphs):
+                para_dicts.append({"order": od + 1, "text": p})
+            question = one['qa']["question"].strip()
+            answer = one['qa']["answer"]
+            exe_ans = one['qa']["exe_ans"]
+            derivation = one['qa']["program"]
+            if isinstance(exe_ans,float):
+                exe_ans = str(np.round(exe_ans,4))
+            try:
+               instance = self._to_instance(question, table, para_dicts, str(exe_ans), derivation, one["id"])
+            except:
+               continue
+            if instance is not None:
+                instances.append(instance)
+        return instances
 
-                    # if "Stop" not in instance["answer_dict"]["gold_ops"] and "ignore" not in instance["answer_dict"]["gold_ops"]:
-                    if self.mode == "dev" and instance["answer_dict"]["gold_ops"][3] == "Stop":
-                        maxround_instances.append(instance)
-            '''
-            for question_answer in questions:
-                try:
-                    question = question_answer["question"].strip()
-                    answer_type = question_answer["answer_type"]
-                    answer = question_answer["answer"]
-                    answer_from = question_answer["answer_from"]
-                    answer_mapping = question_answer["mapping"]
-                    scale = question_answer["scale"]
-                    derivation = question_answer['derivation']
-                    facts = question_answer['facts']
-                    instance = self._to_test_instance(question, table, paragraphs, answer_from,
-                                    answer_type, answer, answer_mapping, scale, question_answer["uid"], derivation, facts)
-                    if instance is not None:
-                        instances.append(instance)
-                except RuntimeError:
-                    print(question_answer["uid"])
-                except IndexError:
-                    index_error_count += 1
-                    print(question_answer["uid"])
-                    print("IndexError. Total Error Count: {}".format(index_error_count))
-                except AssertionError:
-                    assert_error_count += 1
-                    print(question_answer["uid"])
-                    print("AssertError. Total Error Count: {}".format(assert_error_count))
-                except KeyError:
-                    continue
-            '''
-        print(self.op_count)
-        print(self.scale_count)
-        self.op_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Arithmetic": 0, "Count": 0}
-        self.scale_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
-        return instances, maxround_instances
 
 
 # ### Beginning of everything related to segmented tensors ###
