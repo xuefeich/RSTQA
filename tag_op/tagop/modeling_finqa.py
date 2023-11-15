@@ -199,20 +199,17 @@ class TagopModel(nn.Module):
                 question_index: torch.LongTensor,
                 opt_mask : torch.LongTensor,
                 tag_labels: torch.LongTensor,
-                operator_labels: torch.LongTensor,
-                counter_labels: torch.LongTensor,
+                task_labels: torch.LongTensor,
                 ari_ops:torch.LongTensor,
                 ari_labels : torch.LongTensor,
                 order_labels : torch.LongTensor,
                 opt_labels : torch.LongTensor,
-                scale_labels: torch.LongTensor,
                 selected_indexes : np.array,
                 gold_answers: str,
                 paragraph_tokens: List[List[str]],
                 question_tokens: List[List[str]],
                 paragraph_numbers: List[np.ndarray],
                 table_cell_numbers: List[np.ndarray],
-                question_numbers: List[np.ndarray],
                 question_ids: List[str],
                 position_ids: torch.LongTensor = None,
                 table_mask: torch.LongTensor = None,
@@ -277,23 +274,15 @@ class TagopModel(nn.Module):
                            number_index = selected_index[1:]
                        else:
                            number_index = selected_index[1:k[0]+1]
-
                        for roud in range(self.num_ops):
                            order_numbers[bsz].append([])
-                           #print(number_index)
-                           #print(torch.mean(sequence_output_filled[bsz , number_index],dim = 0))
-                           #exit(0)
-
                            selected_numbers_output[num_numbers,roud] = torch.cat((torch.mean(sequence_output[bsz , number_index],dim = 0), opt_output[bsz,roud]),dim = -1)
                            if ari_labels[num_numbers,roud] == 1:
                                order_numbers[bsz][roud].append(number_index)
-                           
-                           #if ari_labels[num_numbers,roud] != -100:
-                           #    output_dict["loss"] = output_dict["loss"] +self.ari_criterion(self.operand_predictor(torch.cat((torch.mean(sequence_output_filled[bsz , number_index],dim = 0), opt_output[bsz,roud]),dim = -1)),ari_labels[num_numbers,roud])
                        num_numbers += 1
 
             operand_prediction = self.operand_predictor(selected_numbers_output)
-            operand_loss = self.ari_criterion(operand_prediction.transpose(1,2),ari_labels)
+            operand_loss = self.operand_criterion(operand_prediction.transpose(1,2),ari_labels)
             output_dict["loss"] = output_dict["loss"] + operand_loss
 
         if len(torch.nonzero(order_labels == -100)) < batch_size * self.num_ops:
@@ -304,8 +293,6 @@ class TagopModel(nn.Module):
                      opd1_output = torch.mean(sequence_output[bsz , order_numbers[bsz][roud][0]],dim = 0)
                      opd2_output = torch.mean(sequence_output[bsz , order_numbers[bsz][roud][1]],dim = 0)
                      order_output[bsz,roud] = torch.cat((opd1_output, opt_output[bsz,roud] , opd2_output),dim = -1)
-                     #output_dict["loss"] = output_dict["loss"] + self.order_criterion(self.order_predictor(torch.cat((opd1_output, opt_output[bsz,roud] , opd2_output),dim = -1)),order_labels[bsz,roud])
-
             order_prediction = self.order_predictor(order_output)
             order_loss = self.order_criterion(order_prediction.transpose(1,2),order_labels)
             output_dict["loss"] = output_dict["loss"] + order_loss
@@ -316,21 +303,11 @@ class TagopModel(nn.Module):
                     output_dict["loss"] = output_dict["loss"] + self.opt_criterion(
                             self.opt_predictor(torch.cat((opt_output[:, j, :], opt_output[:, i, :]), dim=-1)),opt_labels[:, j, i - 1])
 
-
-
         with torch.no_grad():
-            predicted_scale_class = torch.argmax(scale_prediction, dim=-1).detach().cpu().numpy()
             output_dict["question_id"] = []
             output_dict["answer"] = [""]*batch_size
-            output_dict["scale"] = []
             for bsz in range(batch_size):
-                output_dict["scale"].append(SCALE[int(predicted_scale_class[bsz])])
                 output_dict["question_id"].append(question_ids[bsz])
-
-            #print(table_tag_prediction.shape)
-            #print(table_tag_prediction)
-            #print(table_cell_tag_prediction.shape)
-            #print(table_cell_tag_prediction)
 
         return output_dict
 
