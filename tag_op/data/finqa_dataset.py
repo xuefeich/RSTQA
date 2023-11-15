@@ -525,21 +525,18 @@ def _concat(question_ids,
 
 
 def _test_concat(question_ids,
-                 table_ids,
-                 table_tags,
-                 table_cell_index,
-                 # table_cell_number_value,
-                 paragraph_ids,
-                 paragraph_tags,
-                 paragraph_index,
-                 # paragraph_number_value,
-                 cls,
-                 sep,
-                 opt,
-                 question_length_limitation,
-                 passage_length_limitation,
-                 max_pieces,
-                 num_ops):
+            table_ids,
+            table_cell_index,
+            paragraph_ids,
+            paragraph_index,
+            cls,
+            sep,
+            opt,
+            question_length_limitation,
+            passage_length_limitation,
+            max_pieces,
+            num_ops,
+            const):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
     input_ids = torch.zeros([1, max_pieces])
@@ -547,19 +544,16 @@ def _test_concat(question_ids,
     paragraph_mask = torch.zeros_like(input_ids)
     paragraph_index = torch.zeros_like(input_ids)
     table_mask = torch.zeros_like(input_ids)
-    table_index = torch.zeros_like(input_ids)
-    tags = torch.zeros_like(input_ids)
     question_mask = torch.zeros_like(input_ids)
+    table_index = torch.zeros_like(input_ids)
     opt_mask = torch.zeros_like(input_ids)
     opt_index = torch.zeros_like(input_ids)
-
     if question_length_limitation is not None:
         if len(question_ids) > question_length_limitation:
             question_ids = question_ids[:question_length_limitation]
-    question_ids = [cls] + question_ids + [sep]
+    question_ids = [cls] + const + [sep] + question_ids + [sep]
     question_length = len(question_ids)
-    question_mask[0, 1:question_length - 1] = 1
-
+    question_mask[0, 10:question_length - 1] = 1
     table_length = len(table_ids)
     paragraph_length = len(paragraph_ids)
     if passage_length_limitation is not None:
@@ -587,23 +581,17 @@ def _test_concat(question_ids,
     table_mask[0, question_length:question_length + table_length] = 1
     table_index[0, question_length:question_length + table_length] = \
         torch.from_numpy(np.array(in_table_cell_index[:table_length]))
-    tags[0, question_length:question_length + table_length] = torch.from_numpy(np.array(table_tags[:table_length]))
+
     if paragraph_length > 1:
         paragraph_mask[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = 1
         paragraph_index[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
             torch.from_numpy(np.array(in_paragraph_index[:paragraph_length - 1]))
-        tags[0, question_length + table_length + 1:question_length + table_length + paragraph_length] = \
-            torch.from_numpy(np.array(paragraph_tags[:paragraph_length - 1]))
 
-    opt_mask[0,
-    question_length + table_length + paragraph_length + 1: question_length + table_length + paragraph_length + num_ops + 1] = 1
-    # opt_index[0,question_length + table_length + paragraph_length + 1:question_length + table_length + paragraph_length + num_ops+1] = torch.from_numpy(np.array([1,2,3,4,5,6]))
-
+    opt_mask[0,question_length + table_length + paragraph_length + 1: question_length + table_length + paragraph_length + num_ops + 1] = 1
     del in_table_cell_index
     del in_paragraph_index
-    return input_ids, attention_mask, paragraph_mask, paragraph_index, \
-        table_mask, table_index, tags, input_segments, opt_mask, opt_index, question_mask
-
+    return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask, table_index, \
+        input_segments, opt_mask, opt_index,question_mask
 
 def combine_tags(tags1, tags2):
     cat_tags = torch.cat((tags1[0], tags2[0]), dim=0)
@@ -638,102 +626,8 @@ class FinqaTrainReader(object):
 
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
-                       tags_ground_truth, operator_ground_truth, paragraph_tokens,
-                       table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask, opt_labels,
-                       ari_labels, order_labels, question_mask,const_labels,const_indexes,const_list,col_index):
+                       paragraph_tokens, table_cell_tokens, answer_dict, question_id, opt_mask, question_mask,col_index):
 
-        if ari_ops != None:
-            if ari_ops == [0] * self.num_ops:
-                print("no ari ops")
-                ari_ops = [-100] * self.num_ops
-            else:
-                get0 = False
-                for i in range(self.num_ops):
-                    if get0 == True:
-                        ari_ops[i] = -100
-                        order_labels[i] = -100
-                    if ari_ops[i] == 0:
-                        order_labels[i] = -100
-                        if get0 == False:
-                            get0 = True
-        else:
-            ari_ops = [-100] * self.num_ops
-
-        if ari_ops == [-100] * self.num_ops:
-            opt_labels[0, :, :] = -100
-            ari_labels[0, :, :] = -100
-            order_labels[1:] = -100
-            number_indexes = []
-            ari_sel_labels = []
-            if ari_ops[1] == 0:
-                opt_labels[0, :, :] = -100
-        else:
-            for i in range(1, self.num_ops - 1):
-                for j in range(i):
-                    opt_labels[0, i, j] = -100
-                if ari_ops[i] == 0:
-                    ari_labels[0, i:, :] = -100
-                    opt_labels[0, i - 1:, :] = -100
-                    opt_labels[0, :, i - 1:] = -100
-
-            number_indexes = []
-            cur_indexes = []
-            cur = 0
-            selected_indexes = torch.nonzero(tags_ground_truth[0]).squeeze(-1)
-            if len(selected_indexes) == 0:
-                print("no number")
-                return None
-            for sel in selected_indexes:
-                sel = int(sel)
-                if int(table_cell_index[0, sel]) != 0:
-                    if int(table_cell_index[0, sel]) == cur or cur_indexes == []:
-                        if cur_indexes == []:
-                            cur = int(table_cell_index[0, sel])
-                        cur_indexes.append(sel)
-                    else:
-                        cur = int(table_cell_index[0, sel])
-                        number_indexes.append(cur_indexes)
-                        cur_indexes = [sel]
-                else:
-                    if int(paragraph_index[0, sel]) == cur or cur_indexes == []:
-                        if cur_indexes == []:
-                            cur = int(paragraph_index[0, sel])
-                        cur_indexes.append(sel)
-                    else:
-                        cur = int(paragraph_index[0, sel])
-                        number_indexes.append(cur_indexes)
-                        cur_indexes = [sel]
-            number_indexes.append(cur_indexes)
-            distinct_si = []
-            for i, ni in enumerate(number_indexes):
-                distinct_si.append(ni[0])
-                p = 10 - len(ni)
-                if p > 0:
-                    number_indexes[i] += [0] * p
-                else:
-                    number_indexes[i] = number_indexes[i][:10]
-                    print("long number")
-                    print(ni)
-                    print(table_cell_index[0, ni])
-                    print(paragraph_index[0, ni])
-                    if int(table_cell_index[0, ni[0]]) != 0:
-                        print(table_cell_number_value[int(table_cell_index[0, ni[0]]) - 1])
-                    elif int(paragraph_index[0, ni[0]]) != 0:
-                        print(paragraph_number_value[int(paragraph_index[0, ni[0]]) - 1])
-                    else:
-                        print("extract err")  # if question_answer["uid"] in ignore_ids:
-
-            ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
-            if len(const_labels) > 0:
-               number_indexes  = const_indexes + number_indexes
-               const_labels = torch.from_numpy(np.array(const_labels))
-               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
-               for const in const_list:
-                   tags_ground_truth[0,const_dict[int(const)]] = 1
-            if ari_sel_labels.shape[0] != len(number_indexes):
-                print(ari_sel_labels)
-                print(number_indexes)
-                exit(0)
         opt_id = torch.nonzero(opt_mask == 1)[0, 1]
 
         return {
@@ -748,18 +642,11 @@ class FinqaTrainReader(object):
             "col_index" : np.array(col_index),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
-            "tag_labels": np.array(tags_ground_truth),
-            "operator_label": int(operator_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
             "answer_dict": answer_dict,
             "question_id": question_id,
-            "ari_ops": torch.LongTensor(ari_ops),
             "opt_mask": opt_id,
-            "order_labels": torch.LongTensor(order_labels),
-            "ari_labels": torch.LongTensor(np.array(ari_sel_labels)),
-            "selected_indexes": np.array(number_indexes),
-            "opt_labels": torch.LongTensor(np.array(opt_labels)),
         }
 
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer: str, derivation: str,question_id: str):
@@ -1203,231 +1090,6 @@ class FinqaTestReader(object):
         paragraph_tokens, paragraph_ids,  paragraph_word_piece_mask, paragraph_number_mask, \
             paragraph_number_value, paragraph_index,sorted_order = paragraph_tokenize(question, paragraphs, self.tokenizer)
 
-        order_labels = np.zeros(self.num_ops)
-        ari_ops = [0] * self.num_ops
-        opt_labels = torch.zeros(1, self.num_ops - 1, self.num_ops - 1)
-        ari_tags = {'table': [], 'para': []}
-        const_keys = list(const_dict.keys())
-        const_list = []
-        const_labels = []
-        number_indexes = []
-        if answer in ["yes","no"]:
-            task = 0
-            d = derivation.split("),")[0]
-            [opd1,opd2] = d.split(",")
-            [op,opd1] = opd1.split("(")
-            op = op.strip(" ")
-            opd2 = opd2.strip(")")
-            n1 = False
-            n2 = False
-            if "const" in opd1:
-                try:
-                   opd1n = int(opd1.strip(" ").strip("const_"))
-                except:
-                   return None
-                if opd1n not in const_keys:
-                   return None
-                if opd1n not in const_list:
-                    number_indexes.append([const_dict[opd1n]]+[0]*9)
-                    const_labels.append([0,0,0,0,0,0])
-                    const_labels[-1][i] = 1
-                    const_list.append(opd1n)
-                else:
-                    const_labels[const_list.index(opd1n)][i] = 1
-            else:
-                n1 = True
-                opd1_mapping = find_mapping(opd1,table,paragraphs)
-                if opd1_mapping is None:
-                  return None
-            if "const" in opd2:
-                try:
-                   opd2n = int(opd2.strip(" ").strip("const_"))
-                except:
-                   return None
-                if opd2n not in const_keys:
-                   return None
-                if opd2n not in const_list:
-                    number_indexes.append([const_dict[opd2n]]+[0]*9)
-                    const_labels.append([0,0,0,0,0,0])
-                    const_labels[-1][i] = 1
-                    const_list.append(opd2n)
-                else:
-                    const_labels[const_list.index(opd2n)][i] = 1
-            else:
-                n2 = True
-                opd2_mapping = find_mapping(opd2,table,paragraphs)
-                if opd2_mapping is None:
-                  return None
-            op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
-            op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
-            op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
-            op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
-            ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
-            ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
-            if "const" in opd1:
-                if "const" in opd2:
-                    if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
-                        order_labels[0] = 1
-            elif n1 and "table" in opd1_mapping:
-                if "const" in opd2:
-                    order_labels[0] = 1
-                elif n2 and "table" in opd2_mapping:
-                    if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
-                        order_labels[0] = 1
-                    elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
-                        order_labels[0] = 1
-            elif n1 and "paragraph" in opd1_mapping:
-                if n2 and "paragraph" in opd2_mapping:
-                    opd1_pid = sorted_order.index(list(opd1_mapping["paragraph"].keys())[0])
-                    opd2_pid = sorted_order.index(list(opd2_mapping["paragraph"].keys())[0])
-                    if int(opd1_pid) > int(opd2_pid):
-                        order_labels[0] = 1
-                    elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][opd1_pid][0][0] > opd2_mapping["paragraph"][opd2_pid][0][0]:
-                        order_labels[0] = 1
-                else:
-                    order_labels[0] = 1
-        else:
-            task = 1
-            dlist = derivation.split("),")
-            for i,d in enumerate(dlist):
-                if i >= self.num_ops:
-                    break
-                [opd1,opd2] = d.split(",")
-                [op,opd1] = opd1.split("(")
-                op = op.strip(" ")
-                ari_ops[i] = ARI_CLASSES_[op]
-                
-                if "table_" in op:
-                   for i in range(len(table)):
-                      cell = table[i][0]
-                      if opd1.strip(" ") in cell:
-                         temp_table_tags = table_tagging(table, self.tokenizer, {"table":[[i,0]]})
-                         ari_tags['table'].append(temp_table_tags)
-                         ari_tags['para'].append([0]*512)
-                         break
-                   continue
-
-                opd2 = opd2.strip(")")
-                n1 = False
-                n2 = False
-                if "#" in opd1:
-                    j = int(opd1.strip(" ").strip("#"))
-                    if j > 5:
-                      return None
-                    opt_labels[0,j,i-1] = 1
-                elif "const" in opd1:
-                    try:
-                       opd1n = int(opd1.strip(" ").strip("const_"))
-                    except:
-                       return None
-                    if opd1n not in const_keys:
-                        return None
-                    if opd1n not in const_list:
-                        number_indexes.append([const_dict[opd1n]]+[0]*9)
-                        const_labels.append([0,0,0,0,0,0])
-                        const_labels[-1][i] = 1
-                        const_list.append(opd1n)
-                    else:
-                        const_labels[const_list.index(opd1n)][i] = 1
-                else:
-                    n1 = True
-                    opd1_mapping = find_mapping(opd1,table,paragraphs)                                
-                    if opd1_mapping is None:
-                       return None
-                if "#" in opd2:
-                    j = int(opd2.strip(" ").strip("#"))
-                    if j > 5:
-                      return None
-                    if op in ["add","multiply"]:
-                        opt_labels[0,j,i-1] = 1
-                    else:
-                        opt_labels[0, j, i - 1] = 2
-                elif "const" in opd2:
-                    try:
-                       opd2n = int(opd2.strip(" ").strip("const_"))
-                    except:
-                       return None
-                    if opd2n not in const_keys:
-                        return None
-                    if opd2n not in const_list:
-                        number_indexes.append([const_dict[opd2n]]+[0]*9)
-                        const_labels.append([0,0,0,0,0,0])
-                        const_labels[-1][i] = 1
-                        const_list.append(opd2n)
-                    else:
-                        const_labels[const_list.index(opd2n)][i] = 1
-                else:
-                    n2 = True
-                    opd2_mapping = find_mapping(opd2,table,paragraphs)
-                    if opd2_mapping is None:
-                       return None
-                if op in ["add", "multiply"]:
-                    order_labels[i] = -100
-                    if n1 and "table" in opd1_mapping:
-                        if n2 and "table" in opd2_mapping:
-                            opd1_mapping["table"] += opd2_mapping["table"]
-                    elif n1:
-                        if n2 and "table" in opd2_mapping:
-                            opd1_mapping["table"] = opd2_mapping["table"]
-                    elif n2 and "table" in opd2_mapping:
-                       opd1_mapping = opd2_mapping
-                    if n1 and "paragraph" in opd1_mapping:
-                        if n2 and "paragraph" in opd2_mapping:
-                            pid = list(opd2_mapping["paragraph"].keys())[0]
-                            if pid in opd1_mapping["paragraph"]:
-                                opd1_mapping["paragraph"][pid] += opd2_mapping["paragraph"][pid]
-                            else:
-                                opd1_mapping["paragraph"][pid] = opd2_mapping["paragraph"][pid]
-                    elif n1:
-                        if n2 and "paragraph" in opd2_mapping:
-                            opd1_mapping["paragraph"] = opd2_mapping["paragraph"]
-                    elif n2 and "paragraph" in opd2_mapping:
-                         opd1_mapping = opd2_mapping
-
-                    if n1 or n2:
-                        temp_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
-                        temp_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
-                        ari_tags['table'].append(temp_table_tags)
-                        ari_tags['para'].append(temp_para_tags)
-                    else:
-                        return None
-                else:
-                    op1_table_tags = [0]*512
-                    op2_table_tags = [0]*512
-                    op1_para_tags = [0]*512
-                    op2_para_tags = [0]*512
-                    if n1:
-                       op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
-                       op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
-                    if n2:
-                       op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
-                       op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
-                    ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
-                    ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
-                    if "const" in opd1:
-                       if "const" in opd2:
-                           if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
-                               order_labels[i] = 1
-                    elif n1 and "table" in opd1_mapping:
-                        if "const" in opd2:
-                            order_labels[i] = 1
-                        elif n2 and "table" in opd2_mapping:
-                            if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
-                                order_labels[i] = 1
-                            elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
-                                order_labels[i] = 1
-                    elif n1 and "paragraph" in opd1_mapping:
-                        if n2 and "paragraph" in opd2_mapping:
-                            pid1 = list(opd1_mapping["paragraph"].keys())[0]
-                            pid2 = list(opd2_mapping["paragraph"].keys())[0]
-                            opd1_pid = sorted_order.index(pid1)
-                            opd2_pid = sorted_order.index(pid2)
-                            if int(opd1_pid) > int(opd2_pid):
-                                order_labels[i] = 1
-                            elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][pid1][0][0] > opd2_mapping["paragraph"][pid2][0][0]:
-                                order_labels[i] = 1
-                        else:
-                            order_labels[i] = 1
         
         for i in range(len(table)):
             for j in range(len(table[i])):
@@ -1442,20 +1104,15 @@ class FinqaTestReader(object):
         question_ids = question_tokenizer(question_text, self.tokenizer)
 
         input_ids, attention_mask, paragraph_mask, paragraph_index, \
-            table_mask, table_index, token_type_ids, opt_mask, opt_index, ari_round_tags, opd_two_tags, ari_round_labels, question_mask = \
-            _concat(question_ids, table_ids, table_cell_index,
+            table_mask, table_index, token_type_ids, opt_mask, opt_index, question_mask = \
+            _test_concat(question_ids, table_ids, table_cell_index,
                     paragraph_ids, paragraph_index, self.cls,
                     self.sep, self.opt, self.question_length_limit,
-                    self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags,self.const)
-        
-        tags = combine_tags(ari_round_tags,opd_two_tags)
-
-        ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
+                    self.passage_length_limit, self.max_pieces, self.num_ops, self.const)
         answer_dict = {"answer": answer}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
-                                   paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags,
-                                   task,paragraph_tokens, table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask,
-                                   opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes,const_list,col_index)
+                                   paragraph_number_value, table_cell_number_value, paragraph_index, table_index,
+                                   paragraph_tokens, table_cell_tokens, answer_dict, question_id,opt_mask, question_mask,col_index)
 
     def _read(self, file_path: str):
         print("Reading file at %s", file_path)
