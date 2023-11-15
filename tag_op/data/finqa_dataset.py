@@ -211,6 +211,8 @@ def table_tokenize(table, tokenizer):
     table_ids = []
     table_cell_index = []
     table_cell_number_value = []
+    col_index = []
+    cur_id = 1
     current_cell_index = 1
     for i in range(len(table)):
         for j in range(len(table[i])):
@@ -222,10 +224,12 @@ def table_tokenize(table, tokenizer):
                 table_cell_number_value.append(to_number(table[i][j]))
             else:
                 table_cell_number_value.append(np.nan)
+            col_index.append(cur_id)
             table_cell_tokens.append(table[i][j])
             table_cell_index += [current_cell_index for _ in range(len(cell_ids))]
             current_cell_index += 1
-    return table_cell_tokens, table_ids, table_cell_number_value, table_cell_index
+        cur_id += 1
+    return table_cell_tokens, table_ids, table_cell_number_value, table_cell_index,col_index
 
 
 def table_tagging(table, tokenizer, mapping):
@@ -636,7 +640,7 @@ class TagTaTQAReader(object):
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
                        tags_ground_truth, operator_ground_truth, paragraph_tokens,
                        table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask, opt_labels,
-                       ari_labels, order_labels, question_mask,const_labels,const_indexes,const_list):
+                       ari_labels, order_labels, question_mask,const_labels,const_indexes,const_list,col_index):
 
         if ari_ops != None:
             if ari_ops == [0] * self.num_ops:
@@ -676,6 +680,9 @@ class TagTaTQAReader(object):
             cur_indexes = []
             cur = 0
             selected_indexes = torch.nonzero(tags_ground_truth[0]).squeeze(-1)
+            if len(selected_indexes) == 0:
+                print("no number")
+                return None
             for sel in selected_indexes:
                 sel = int(sel)
                 if int(table_cell_index[0, sel]) != 0:
@@ -738,6 +745,7 @@ class TagTaTQAReader(object):
             "question_mask": np.array(question_mask),
             "paragraph_number_value": np.array(paragraph_number_value),
             "table_cell_number_value": np.array(table_cell_number_value),
+            "col_index" : np.array(col_index),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
             "tag_labels": np.array(tags_ground_truth),
@@ -756,7 +764,7 @@ class TagTaTQAReader(object):
 
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer: str, derivation: str,question_id: str):
         question_text = question.strip()
-        table_cell_tokens, table_ids,table_cell_number_value, table_cell_index = table_tokenize(table, self.tokenizer)
+        table_cell_tokens, table_ids,table_cell_number_value, table_cell_index,col_index = table_tokenize(table, self.tokenizer)
         paragraph_tokens, paragraph_ids,  paragraph_word_piece_mask, paragraph_number_mask, \
             paragraph_number_value, paragraph_index,sorted_order = paragraph_tokenize(question, paragraphs, self.tokenizer)
 
@@ -764,6 +772,7 @@ class TagTaTQAReader(object):
         ari_ops = [0] * self.num_ops
         opt_labels = torch.zeros(1, self.num_ops - 1, self.num_ops - 1)
         ari_tags = {'table': [], 'para': []}
+        const_keys = list(const_dict.keys())
         const_list = []
         const_labels = []
         number_indexes = []
@@ -774,26 +783,46 @@ class TagTaTQAReader(object):
             [op,opd1] = opd1.split("(")
             op = op.strip(" ")
             opd2 = opd2.strip(")")
+            n1 = False
+            n2 = False
             if "const" in opd1:
-                if opd1 not in const_list:
-                    number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]]+[0]*9)
+                try:
+                   opd1n = int(opd1.strip(" ").strip("const_"))
+                except:
+                   return None
+                if opd1n not in const_keys:
+                   return None
+                if opd1n not in const_list:
+                    number_indexes.append([const_dict[opd1n]]+[0]*9)
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
-                    const_list.append(opd1.strip(" ").strip("const_"))
+                    const_list.append(opd1n)
                 else:
-                    const_labels[const_list.index(opd1)][i] = 1
+                    const_labels[const_list.index(opd1n)][i] = 1
             else:
+                n1 = True
                 opd1_mapping = find_mapping(opd1,table,paragraphs)
+                if opd1_mapping is None:
+                  return None
             if "const" in opd2:
-                if opd2 not in const_list:
-                    number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]]+[0]*9)
+                try:
+                   opd2n = int(opd2.strip(" ").strip("const_"))
+                except:
+                   return None
+                if opd2n not in const_keys:
+                   return None
+                if opd2n not in const_list:
+                    number_indexes.append([const_dict[opd2n]]+[0]*9)
                     const_labels.append([0,0,0,0,0,0])
                     const_labels[-1][i] = 1
-                    const_list.append(opd2.strip(" ").strip("const_"))
+                    const_list.append(opd2n)
                 else:
-                    const_labels[const_list.index(opd2)][i] = 1
+                    const_labels[const_list.index(opd2n)][i] = 1
             else:
+                n2 = True
                 opd2_mapping = find_mapping(opd2,table,paragraphs)
+                if opd2_mapping is None:
+                  return None
             op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
             op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
             op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
@@ -803,25 +832,25 @@ class TagTaTQAReader(object):
             if "const" in opd1:
                 if "const" in opd2:
                     if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
-                        order_labels[i] = 1
-            elif "table" in opd1_mapping:
+                        order_labels[0] = 1
+            elif n1 and "table" in opd1_mapping:
                 if "const" in opd2:
-                    order_labels[i] = 1
-                elif "table" in opd2_mapping:
+                    order_labels[0] = 1
+                elif n2 and "table" in opd2_mapping:
                     if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
-                        order_labels[i] = 1
+                        order_labels[0] = 1
                     elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
-                        order_labels[i] = 1
-            elif "paragraph" in opd1_mapping:
-                if "paragraph" in opd2_mapping:
+                        order_labels[0] = 1
+            elif n1 and "paragraph" in opd1_mapping:
+                if n2 and "paragraph" in opd2_mapping:
                     opd1_pid = sorted_order.index(list(opd1_mapping["paragraph"].keys())[0])
                     opd2_pid = sorted_order.index(list(opd2_mapping["paragraph"].keys())[0])
                     if int(opd1_pid) > int(opd2_pid):
-                        order_labels[i] = 1
+                        order_labels[0] = 1
                     elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][opd1_pid][0][0] > opd2_mapping["paragraph"][opd2_pid][0][0]:
-                        order_labels[i] = 1
+                        order_labels[0] = 1
                 else:
-                    order_labels[i] = 1
+                    order_labels[0] = 1
         else:
             task = 1
             dlist = derivation.split("),")
@@ -832,87 +861,135 @@ class TagTaTQAReader(object):
                 [op,opd1] = opd1.split("(")
                 op = op.strip(" ")
                 ari_ops[i] = ARI_CLASSES_[op]
+                
+                if "table_" in op:
+                   for i in range(len(table)):
+                      cell = table[i][0]
+                      if opd1.strip(" ") in cell:
+                         temp_table_tags = table_tagging(table, self.tokenizer, {"table":[[i,0]]})
+                         ari_tags['table'].append(temp_table_tags)
+                         ari_tags['para'].append([0]*512)
+                         break
+                   continue
+
                 opd2 = opd2.strip(")")
+                n1 = False
+                n2 = False
                 if "#" in opd1:
                     j = int(opd1.strip(" ").strip("#"))
+                    if j > 5:
+                      return None
                     opt_labels[0,j,i-1] = 1
                 elif "const" in opd1:
-                    if opd1 not in const_list:
-                        number_indexes.append([const_dict[int(opd1.strip(" ").strip("const_"))]]+[0]*9)
+                    try:
+                       opd1n = int(opd1.strip(" ").strip("const_"))
+                    except:
+                       return None
+                    if opd1n not in const_keys:
+                        return None
+                    if opd1n not in const_list:
+                        number_indexes.append([const_dict[opd1n]]+[0]*9)
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
-                        const_list.append(opd1.strip(" ").strip("const_"))
+                        const_list.append(opd1n)
                     else:
-                        const_labels[const_list.index(opd1)][i] = 1
+                        const_labels[const_list.index(opd1n)][i] = 1
                 else:
+                    n1 = True
                     opd1_mapping = find_mapping(opd1,table,paragraphs)                                
-                
+                    if opd1_mapping is None:
+                       return None
                 if "#" in opd2:
                     j = int(opd2.strip(" ").strip("#"))
+                    if j > 5:
+                      return None
                     if op in ["add","multiply"]:
                         opt_labels[0,j,i-1] = 1
                     else:
                         opt_labels[0, j, i - 1] = 2
                 elif "const" in opd2:
-                    if opd2 not in const_list:
-                        number_indexes.append([const_dict[int(opd2.strip(" ").strip("const_"))]]+[0]*9)
+                    try:
+                       opd2n = int(opd2.strip(" ").strip("const_"))
+                    except:
+                       return None
+                    if opd2n not in const_keys:
+                        return None
+                    if opd2n not in const_list:
+                        number_indexes.append([const_dict[opd2n]]+[0]*9)
                         const_labels.append([0,0,0,0,0,0])
                         const_labels[-1][i] = 1
-                        const_list.append(opd2.strip(" ").strip("const_"))
+                        const_list.append(opd2n)
                     else:
-                        const_labels[const_list.index(opd2)][i] = 1
+                        const_labels[const_list.index(opd2n)][i] = 1
                 else:
+                    n2 = True
                     opd2_mapping = find_mapping(opd2,table,paragraphs)
-
+                    if opd2_mapping is None:
+                       return None
                 if op in ["add", "multiply"]:
                     order_labels[i] = -100
-                    if "table" in opd1_mapping:
-                        if "table" in opd2_mapping:
+                    if n1 and "table" in opd1_mapping:
+                        if n2 and "table" in opd2_mapping:
                             opd1_mapping["table"] += opd2_mapping["table"]
-                    else:
-                        if "table" in opd2_mapping:
+                    elif n1:
+                        if n2 and "table" in opd2_mapping:
                             opd1_mapping["table"] = opd2_mapping["table"]
-                    if "paragraph" in opd1_mapping:
-                        if "paragraph" in opd2_mapping:
+                    elif n2 and "table" in opd2_mapping:
+                       opd1_mapping = opd2_mapping
+                    if n1 and "paragraph" in opd1_mapping:
+                        if n2 and "paragraph" in opd2_mapping:
                             pid = list(opd2_mapping["paragraph"].keys())[0]
                             if pid in opd1_mapping["paragraph"]:
                                 opd1_mapping["paragraph"][pid] += opd2_mapping["paragraph"][pid]
                             else:
                                 opd1_mapping["paragraph"][pid] = opd2_mapping["paragraph"][pid]
-                    else:
-                        if "paragraph" in opd2_mapping:
+                    elif n1:
+                        if n2 and "paragraph" in opd2_mapping:
                             opd1_mapping["paragraph"] = opd2_mapping["paragraph"]
+                    elif n2 and "paragraph" in opd2_mapping:
+                         opd1_mapping = opd2_mapping
 
-                    temp_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
-                    temp_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
-                    ari_tags['table'].append(temp_table_tags)
-                    ari_tags['para'].append(temp_para_tags)
+                    if n1 or n2:
+                        temp_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
+                        temp_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
+                        ari_tags['table'].append(temp_table_tags)
+                        ari_tags['para'].append(temp_para_tags)
+                    else:
+                        return None
                 else:
-                    op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
-                    op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
-                    op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
-                    op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
+                    op1_table_tags = [0]*512
+                    op2_table_tags = [0]*512
+                    op1_para_tags = [0]*512
+                    op2_para_tags = [0]*512
+                    if n1:
+                       op1_table_tags = table_tagging(table, self.tokenizer, opd1_mapping)
+                       op1_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd1_mapping,sorted_order)
+                    if n2:
+                       op2_table_tags = table_tagging(table, self.tokenizer, opd2_mapping)
+                       op2_para_tags = paragraph_tagging(question, paragraphs, self.tokenizer, opd2_mapping,sorted_order)
                     ari_tags['table'].append({"operand1": op1_table_tags, "operand2": op2_table_tags})
                     ari_tags['para'].append({"operand1": op1_para_tags, "operand2": op2_para_tags})
                     if "const" in opd1:
                        if "const" in opd2:
                            if int(opd1.strip(" ").strip("const_")) > int(opd2.strip(" ").strip("const_")):
                                order_labels[i] = 1
-                    elif "table" in opd1_mapping:
+                    elif n1 and "table" in opd1_mapping:
                         if "const" in opd2:
                             order_labels[i] = 1
-                        elif "table" in opd2_mapping:
+                        elif n2 and "table" in opd2_mapping:
                             if opd1_mapping["table"][0][0] >  opd2_mapping["table"][0][0]:
                                 order_labels[i] = 1
                             elif opd1_mapping["table"][0][1] >  opd2_mapping["table"][0][1]:
                                 order_labels[i] = 1
-                    elif "paragraph" in opd1_mapping:
-                        if "paragraph" in opd2_mapping:
-                            opd1_pid = sorted_order.index(list(opd1_mapping["paragraph"].keys())[0])
-                            opd2_pid = sorted_order.index(list(opd2_mapping["paragraph"].keys())[0])
+                    elif n1 and "paragraph" in opd1_mapping:
+                        if n2 and "paragraph" in opd2_mapping:
+                            pid1 = list(opd1_mapping["paragraph"].keys())[0]
+                            pid2 = list(opd2_mapping["paragraph"].keys())[0]
+                            opd1_pid = sorted_order.index(pid1)
+                            opd2_pid = sorted_order.index(pid2)
                             if int(opd1_pid) > int(opd2_pid):
                                 order_labels[i] = 1
-                            elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][opd1_pid][0][0] > opd2_mapping["paragraph"][opd2_pid][0][0]:
+                            elif opd1_pid == opd2_pid and opd1_mapping["paragraph"][pid1][0][0] > opd2_mapping["paragraph"][pid2][0][0]:
                                 order_labels[i] = 1
                         else:
                             order_labels[i] = 1
@@ -937,12 +1014,13 @@ class TagTaTQAReader(object):
                     self.passage_length_limit, self.max_pieces, self.num_ops, ari_tags,self.const)
         
         tags = combine_tags(ari_round_tags,opd_two_tags)
+
         ari_round_labels = torch.where(tags > 0, ari_round_labels, -100)
         answer_dict = {"answer": answer}
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                                    paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags,
                                    task,paragraph_tokens, table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask,
-                                   opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes,const_list)
+                                   opt_labels, ari_round_labels, order_labels, question_mask,const_labels,number_indexes,const_list,col_index)
 
     def _read(self, file_path: str):
         print("Reading file at %s", file_path)
@@ -960,10 +1038,12 @@ class TagTaTQAReader(object):
             answer = one['qa']["answer"]
             exe_ans = one['qa']["exe_ans"]
             derivation = one['qa']["program"]
-
             if isinstance(exe_ans,float):
                 exe_ans = str(np.round(exe_ans,4))
-            instance = self._to_instance(question, table, para_dicts, str(exe_ans), derivation, one["id"])
+            try:
+               instance = self._to_instance(question, table, para_dicts, str(exe_ans), derivation, one["id"])
+            except:
+               continue
             if instance is not None:
                 instances.append(instance)
         return instances
