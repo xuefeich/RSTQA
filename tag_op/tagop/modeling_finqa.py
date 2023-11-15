@@ -7,6 +7,8 @@ from .tools import allennlp as util
 from typing import Dict, List, Tuple
 import numpy as np
 from tag_op.data.file_utils import is_scatter_available
+from tag_op.data.finqa_data_util import *
+
 
 np.set_printoptions(threshold=np.inf)
 # soft dependency
@@ -113,8 +115,7 @@ class TagopModel(nn.Module):
                  ari_criterion: nn.CrossEntropyLoss = None,
                  opt_criterion: nn.CrossEntropyLoss = None,
                  order_criterion: nn.CrossEntropyLoss = None,
-                 ari_operator_criterion: nn.CrossEntropyLoss = None,
-                 scale_criterion: nn.CrossEntropyLoss = None,
+                 operand_criterion: nn.CrossEntropyLoss = None,
                  hidden_size: int = None,
                  dropout_prob: float = None,
                  arithmetic_op_index: List = None,
@@ -134,37 +135,19 @@ class TagopModel(nn.Module):
         self.hidden_size = hidden_size
         if dropout_prob is None:
             dropout_prob = self.config.hidden_dropout_prob
-        # operator predictor
-        self.operator_predictor = FFNLayer(3*hidden_size, hidden_size, operator_classes, dropout_prob)
-        self.ari_predictor = ATTLayer(hidden_size, ari_classes, dropout_prob)
-        self.scale_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
+        self.task_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
         self.tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
-        self.if_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
-        self.if_tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
         self.operand_predictor = FFNLayer(2*hidden_size, hidden_size, 2, dropout_prob)
         self.opt_predictor = FFNLayer(2*hidden_size, hidden_size, 3, dropout_prob)
         self.order_predictor = FFNLayer(3*hidden_size, hidden_size, 2, dropout_prob)
-        self.operator_criterion = operator_criterion
-        self.scale_criterion = scale_criterion
+        self.task_criterion = task_criterion
         self.ari_criterion = ari_criterion
         self.opt_criterion = opt_criterion
         self.order_criterion = order_criterion
-        self.counter_criterion = counter_criterion
-        self.ari_operator_criterion = ari_operator_criterion
+        self.operand_criterion = operand_criterion
         # NLLLoss for tag_prediction
         self.NLLLoss = nn.NLLLoss(reduction="sum")
-        # tapas config
-        self.config = config
-        self.arithmetic_op_index = arithmetic_op_index
         self.ARI_CLASSES = ARITHMETIC_CLASSES_
-        if ablation_mode == 0:
-            self.OPERATOR_CLASSES = OPERATOR_CLASSES_
-        elif ablation_mode == 1:
-            self.OPERATOR_CLASSES = get_op_1(op_mode)
-        elif ablation_mode == 2:
-            self.OPERATOR_CLASSES = get_op_2(op_mode)
-        else:
-            self.OPERATOR_CLASSES = get_op_3(op_mode)
         self._metrics = TaTQAEmAndF1()
 
     """
