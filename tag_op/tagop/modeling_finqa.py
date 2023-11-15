@@ -14,21 +14,6 @@ if is_scatter_available():
     from torch_scatter import scatter
     from torch_scatter import scatter_max
 
-
-ari_class_keys = list(ARITHMETIC_CLASSES_.keys())
-def replace_opt(tensor,mask,ari_operator_ids,pred_ari_class,batch_size,num_ops):
-    new_tensor = tensor.clone()
-    for bsz in range(batch_size):
-        for roud in range(num_ops):
-            if pred_ari_class[bsz,roud] != -100:
-                new_tensor[bsz,mask[bsz]+roud] = ari_operator_ids['<'+ari_class_keys[pred_ari_class[bsz,roud]]+'>']
-            else:
-                new_tensor[bsz,mask[bsz]+roud] = ari_operator_ids['<'+ari_class_keys[0]+'>']
-        #mask[bsz] += 1
-    return new_tensor
-
-
-
 def get_continuous_tag_slots(paragraph_token_tag_prediction):
     tag_slots = []
     span_start = False
