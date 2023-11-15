@@ -243,6 +243,12 @@ class TagopModel(nn.Module):
         paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
         paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
 
+
+        const_output = sequence_output[:,1:10,:]
+        const_tag_prediction = self.tag_predictor(const_output)
+        const_tag_prediction = util.masked_log_softmax(const_tag_prediction, mask=None)
+        const_tag_labels = tag_labels[:,1:10,:].float()
+
         task_prediction = self.task_predictor(cls_output)
         task_loss = self.task_criterion(task_prediction, task_labels)
                     
@@ -257,8 +263,8 @@ class TagopModel(nn.Module):
         table_tag_prediction_loss = self.NLLLoss(table_tag_prediction, table_tag_labels.long())
         paragraph_tag_prediction = paragraph_tag_prediction.transpose(1, 2)
         paragraph_token_tag_prediction_loss = self.NLLLoss(paragraph_tag_prediction, paragraph_tag_labels.long())
-        output_dict["loss"] = operator_loss + task_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss
-
+        const_loss = self.NLLLoss(const_tag_prediction, const_tag_labels.transpose(1, 2).long())
+        output_dict["loss"] = operator_loss + task_loss + table_tag_prediction_loss + paragraph_token_tag_prediction_loss + const_loss
         
         num_numbers_truth = ari_labels.shape[0]
         selected_numbers_output = torch.zeros([num_numbers_truth,self.num_ops,2*self.hidden_size],device = device)
