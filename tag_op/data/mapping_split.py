@@ -18,6 +18,8 @@ def find_table_mapping(number,table):
 
 def find_mapping(number,table,paragraphs):
     number = to_number(number)
+    if not number:
+       return None
     tm = find_table_mapping(number,table)
     if tm:
         return {"table":[tm]}
@@ -28,11 +30,11 @@ def find_mapping(number,table,paragraphs):
                 for mp2 in range(mp1+1,lp):
                    para_number = to_number(paragraphs[pid]["text"][mp1:mp2])
                    if para_number:
-                      if abs(abs(number) - abs(para_number)) < 0.0001 or abs(abs(number) - abs(para_number)*0.01) < 0.0001:
-                         para_mapping = {}
-                         para_mapping["paragraph"] = {}
-                         para_mapping["paragraph"][pid+1] = [[mp1,mp2]]
-                         return para_mapping
+                       if abs(abs(number) - abs(para_number)) < 0.0001 or abs(abs(number) - abs(para_number)*0.01) < 0.0001:
+                          para_mapping = {}
+                          para_mapping["paragraph"] = {}
+                          para_mapping["paragraph"][pid+1] = [[mp1,mp2]]
+                          return para_mapping
     return None
 
 
