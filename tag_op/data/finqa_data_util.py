@@ -2,7 +2,7 @@ import numpy as np
 from tatqa_utils import to_number, is_number
 import re
 from enum import IntEnum
-ARI_CLASSES_ = {"STP":0,"add":1,"subtract":2,"multiply":3,"divide":4,"exp":5}
+ARI_CLASSES_ = {"STP":0,"add":1,"subtract":2,"multiply":3,"divide":4,"exp":5,"table_average":6,"table_max":7,"table_min":8,"table_sum":9}
 
 def get_op_1(op_mode):
     if op_mode==1:
