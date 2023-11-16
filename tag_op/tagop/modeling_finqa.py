@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 from tag_op.data.file_utils import is_scatter_available
 from tag_op.data.finqa_data_util import *
-const_list = 
+const_list = [1,2,3,4,5,100,1000,1000000]
 
 np.set_printoptions(threshold=np.inf)
 # soft dependency
@@ -394,35 +394,41 @@ class TagopModel(nn.Module):
         pred_order = torch.zeros([batch_size,self.num_ops],device = device)
 
         for bsz in range(batch_size):
-            const_selected_indexes = [int(i[0])+1 for i in torch.nonzero(pred_const[bsz])])
+            const_selected_indexes = [[int(i[0])+1] for i in torch.nonzero(pred_const[bsz])])
             const_selected_numbers = [const_list[i-1] for i in const_selected_indexes]
-            
             para_sel_indexes , paragraph_selected_numbers = get_number_index_from_reduce_sequence(paragraph_token_tag_prediction[bsz],paragraph_numbers[bsz])
             table_sel_indexes , table_selected_numbers = get_number_index_from_reduce_sequence(table_cell_tag_prediction[bsz], table_cell_numbers[bsz])
-            selected_numbers = paragraph_selected_numbers + table_selected_numbers
-            selected_indexes = para_sel_indexes + table_sel_indexes
+            selected_numbers = const_selected_numbers + paragraph_selected_numbers + table_selected_numbers
+            selected_indexes = const_selected_indexes + para_sel_indexes + table_sel_indexes
 
             if not selected_numbers:
                 selected_numbers_batch.append([])
             else:
+                cn = len(const_selected_indexes)
                 pn = len(para_sel_indexes)
                 tn = len(table_sel_indexes)
                 k = 0
                 selected_numbers_batch.append(selected_numbers)
                 for sel_index in selected_indexes:
-                    if k < pn:
-                        selected_index = torch.nonzero(paragraph_index[bsz] == sel_index).squeeze(-1)
+                    if k < cn:
+                        selected_index = sel_index
+                        selected_index_mean = sel_index[0]
                     else:
-                        selected_index = torch.nonzero(table_cell_index[bsz] == sel_index).squeeze(-1)
-
-                    selected_index_mean = np.mean(selected_index.float().detach().cpu().numpy())
+                       if k < pn:
+                           selected_index = torch.nonzero(paragraph_index[bsz] == sel_index).squeeze(-1)
+                       else:
+                           selected_index = torch.nonzero(table_cell_index[bsz] == sel_index).squeeze(-1)
+                       selected_index_mean = np.mean(selected_index.float().detach().cpu().numpy())
                     selected_indexes[k] = selected_index_mean
                     k += 1
 
                     number_indexes_batch[num_numbers,0] = bsz
                     number_indexes_batch[num_numbers,1] = selected_index_mean
                     for roud in range(self.num_ops):
-                        operand_prediction[num_numbers,roud] = self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , selected_index],dim = 0).squeeze(0), opt_output[bsz,roud]),dim = -1))
+                        if int(pred_task_class[bsz]) == 0 and roud == 0:
+                            operand_prediction[num_numbers,roud] = self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , selected_index],dim = 0).squeeze(0), cls_output),dim = -1))
+                        else:
+                            operand_prediction[num_numbers,roud] = self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , selected_index],dim = 0).squeeze(0), opt_output[bsz,roud]),dim = -1))
                         cur_score = operand_prediction[num_numbers,roud,1]
                         if cur_score > top_scores[bsz,roud]:
                             top_scores[bsz,roud] = cur_score
@@ -450,7 +456,10 @@ class TagopModel(nn.Module):
                         first_numbers[bsz,roud] = selected_numbers[selected_indexes.index(first_index)]
                         sec_index = max(top_2_indexes[bsz,roud])
                         sec_numbers[bsz,roud] = selected_numbers[selected_indexes.index(sec_index)]
-                        pred_order[bsz,roud] = torch.argmax(self.order_predictor(torch.cat((sequence_output[bsz , int(first_index)], opt_output[bsz,roud] , sequence_output[bsz , int(sec_index)]),dim=-1)),dim = -1)
+                        if int(pred_task_class[bsz]) == 0 and roud == 0:
+                            pred_order[bsz,roud] = torch.argmax(self.order_predictor(torch.cat((sequence_output[bsz , int(first_index)], cls_output , sequence_output[bsz , int(sec_index)]),dim=-1)),dim = -1)
+                        else:
+                            pred_order[bsz,roud] = torch.argmax(self.order_predictor(torch.cat((sequence_output[bsz , int(first_index)], opt_output[bsz,roud] , sequence_output[bsz , int(sec_index)]),dim=-1)),dim = -1)
 
 
 
@@ -472,64 +481,30 @@ class TagopModel(nn.Module):
             pred_opd2_opt_scores = pred_opd2_opt_scores.detach().cpu().numpy()
 
         for bsz in range(batch_size):
-            pred_span = []
-            selected_numbers_labels = []
-            current_ops = ["ignore"]* self.num_ops
-            selected_numbers = []
-            pred_operands = {}
-            
-            if "SPAN-TEXT" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["SPAN-TEXT"]:
-                paragraph_selected_span_tokens = get_single_span_tokens_from_paragraph(
-                      paragraph_token_tag_prediction[bsz],
-                      paragraph_token_tag_prediction_score[bsz],
-                      paragraph_tokens[bsz]
-                   )
-                answer = paragraph_selected_span_tokens
-                answer = sorted(answer)
-                output_dict["pred_span"].append(answer)
-                pred_span += answer
-                current_ops[0] = "Span-in-text"
-            elif "SPAN-TABLE" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["SPAN-TABLE"]:
-                table_selected_tokens = get_single_span_tokens_from_table(
-                   table_cell_tag_prediction[bsz],
-                   table_cell_tag_prediction_score[bsz],
-                   table_cell_tokens[bsz])
-                answer = table_selected_tokens
-                answer = sorted(answer)
-                output_dict["pred_span"].append(answer)
-                pred_span += answer
-                current_ops[0] = "Cell-in-table"
-            elif "MULTI_SPAN" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["MULTI_SPAN"]:
-                paragraph_selected_span_tokens = get_span_tokens_from_paragraph(paragraph_token_tag_prediction[bsz], paragraph_tokens[bsz])
-                table_selected_tokens = get_span_tokens_from_table(table_cell_tag_prediction[bsz], table_cell_tokens[bsz])
-                answer = paragraph_selected_span_tokens + table_selected_tokens
-                answer = sorted(answer)
-                output_dict["pred_span"].append(answer)
-                pred_span += answer
-                current_ops[0] = "Spans"
-            elif "COUNT" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["COUNT"]:
-                paragraph_selected_tokens = \
-                    get_span_tokens_from_paragraph(paragraph_token_tag_prediction[bsz], paragraph_tokens[bsz])
-                table_selected_tokens = \
-                    get_span_tokens_from_table(table_cell_tag_prediction[bsz], table_cell_tokens[bsz])
-                answer = len(paragraph_selected_tokens) + len(table_selected_tokens)
-                output_dict["pred_span"].append(answer)
-                pred_span += sorted(paragraph_selected_tokens + table_selected_tokens)
-                current_ops[0] = "Count"
+            selected_numbers = selected_numbers_batch[bsz]
+            if len(selected_numbers) == 0:
+                answer = ""
             else:
-                if num_numbers == 0:
-                    answer = ""
-                else:
-                    #selected_numbers = [selected_numbers_batch[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
-                    selected_numbers = selected_numbers_batch[bsz]
-
-                    if len(selected_numbers) == 0:
-                        answer = ""
+                if int(pred_task_class[bsz]) == 0:
+                    operand_one = first_numbers[bsz,0]
+                    operand_two = sec_numbers[bsz,0]
+                    if np.isnan(operand_one) or np.isnan(operand_two):
+                        answer = "yes"
                     else:
-                        selected_numbers_labels = [pred_ari_tags_class[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
-                        #selected_numbers_ids = [i for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
-                        temp_ans = []
-                        for roud in range(self.num_ops):
+                        if int(pred_order[bsz,0]) == 0:
+                            if operand_one > operand_two:
+                                answer = "yes"
+                            else:
+                                answer = "no"
+                        else:
+                            if operand_two > operand_one:
+                                answer = "yes"
+                            else:
+                                answer = "no"
+                else:
+                    selected_numbers_labels = [pred_ari_tags_class[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
+                    temp_ans = []
+                    for roud in range(self.num_ops):
                             if "STP" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["STP"]:
                                 if roud == 0:
                                     answer = ""
