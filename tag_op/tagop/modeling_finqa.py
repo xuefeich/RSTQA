@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 from tag_op.data.file_utils import is_scatter_available
 from tag_op.data.finqa_data_util import *
-
+const_list = 
 
 np.set_printoptions(threshold=np.inf)
 # soft dependency
@@ -366,6 +366,7 @@ class TagopModel(nn.Module):
         table_cell_tag_prediction_score = reduce_max_index(table_tag_prediction_score, table_cell_index).detach().cpu().numpy()
         table_tag_prediction_argmax = torch.argmax(table_tag_prediction, dim=-1).float()
         table_cell_tag_prediction = reduce_mean_index(table_tag_prediction_argmax, table_cell_index).detach().cpu().numpy()
+        pred_const = torch.argmax(const_tag_prediction, dim=-1).detach().cpu().numpy()
 
                     
         selected_numbers_output = torch.zeros([200 , self.num_ops, 2*self.hidden_size],device = device)
@@ -393,6 +394,9 @@ class TagopModel(nn.Module):
         pred_order = torch.zeros([batch_size,self.num_ops],device = device)
 
         for bsz in range(batch_size):
+            const_selected_indexes = [int(i[0])+1 for i in torch.nonzero(pred_const[bsz])])
+            const_selected_numbers = [const_list[i-1] for i in const_selected_indexes]
+            
             para_sel_indexes , paragraph_selected_numbers = get_number_index_from_reduce_sequence(paragraph_token_tag_prediction[bsz],paragraph_numbers[bsz])
             table_sel_indexes , table_selected_numbers = get_number_index_from_reduce_sequence(table_cell_tag_prediction[bsz], table_cell_numbers[bsz])
             selected_numbers = paragraph_selected_numbers + table_selected_numbers
