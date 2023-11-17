@@ -607,7 +607,38 @@ class TagopModel(nn.Module):
                             else:
                                 answer = ""
                                 break
-                         
+                    elif "table_max" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["table_max"]:
+                        col_scores = []
+                        for j in range(len(col_cell_numbers)):
+                            col_scores.append(self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , col_sequence_indexes[j]],dim = 0).squeeze(0), 
+                                                                                opt_output[bsz,roud]),dim = -1))[1])
+                        best_col = col_scores.index(max(col_scores))
+                        selected_col_numbers = col_cell_numbers[best_col]
+                        try:
+                            temp_ans.append(max(selected_col_numbers))
+                        except:
+                            if len(temp_ans) > 0:
+                                answer = temp_ans[-1]
+                                break
+                            else:
+                                answer = ""
+                                break
+                    elif "table_min" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["table_min"]:
+                        col_scores = []
+                        for j in range(len(col_cell_numbers)):
+                            col_scores.append(self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , col_sequence_indexes[j]],dim = 0).squeeze(0), 
+                                                                                opt_output[bsz,roud]),dim = -1))[1])
+                        best_col = col_scores.index(max(col_scores))
+                        selected_col_numbers = col_cell_numbers[best_col]
+                        try:
+                            temp_ans.append(min(selected_col_numbers))
+                        except:
+                            if len(temp_ans) > 0:
+                                answer = temp_ans[-1]
+                                break
+                            else:
+                                answer = ""
+                                break     
                     if roud == self.num_ops - 1:
                         answer = np.round(temp_ans[-1],4)
 
