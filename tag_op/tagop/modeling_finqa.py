@@ -572,10 +572,25 @@ class TagopModel(nn.Module):
                             
                             if "add" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["add"]:
                                 temp_ans.append(operand_one + operand_two)
-                            elif "multiply" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["TIMES"]:
+                            elif "multiply" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["multiply"]:
                                 temp_ans.append(operand_one * operand_two)
-                            elif 
-                            elif "AVERAGE" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["AVERAGE"]:
+                            elif "subtract" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["subtract"]:
+                                if is_opt == True or int(pred_order[bsz,roud]) == 0:
+                                    temp_ans.append(operand_one - operand_two)
+                                else:
+                                    temp_ans.append(operand_two - operand_one)
+                            elif "divide" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["divide"]:
+                                if is_opt == True or int(pred_order[bsz,roud]) == 0:
+                                    if operand_two == 0:
+                                        answer  =temp_ans[-1]
+                                        break
+                                    temp_ans.append(operand_one / operand_two)
+                                else:
+                                    if operand_one == 0:
+                                        answer  =temp_ans[-1]
+                                        break
+                                    temp_ans.append(operand_two / operand_one)
+                            elif "table_average" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["table_average"]:
                                 temp_ans.append(np.mean(roud_selected_numbers))
                                     current_ops[roud] = "Average"
                                 else:
