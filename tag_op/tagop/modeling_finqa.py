@@ -99,7 +99,25 @@ def get_number_index_from_reduce_sequence(sequence_reduce_tag_prediction, sequen
         if sequence_reduce_tag_prediction[i] != 0 and np.isnan(sequence_numbers[i - 1]) != True:
             indexes.append(i)
             numbers.append(sequence_numbers[i - 1])
+                    
     return indexes , numbers
+   
+def get_col_index_from_table_sequence(sequence_reduce_tag_prediction, sequence_numbers,col_index):
+    col_indexes = []
+    col_numbers = []
+    for i in range(1, min(len(sequence_numbers) + 1, len(sequence_reduce_tag_prediction))):
+        if i==1 or ( i < len(sequence_numbers) and col_index[i - 2] != col_index[i - 1]):
+            col_indexes.append(i)
+            col_nums = []
+            for j in range(i,len(sequence_numbers)):
+                if col_index[j] == col_index[i - 1]:
+                    if np.isnan(sequence_numbers[j]) != True:
+                        col_nums.append(sequence_numbers[j])
+                else:
+                    break
+            col_numbers.append(col_nums)                    
+    return col_indexes , col_numbers
+
 
 class TagopModel(nn.Module):
     def __init__(self,
@@ -481,151 +499,117 @@ class TagopModel(nn.Module):
             pred_opd2_opt_scores = pred_opd2_opt_scores.detach().cpu().numpy()
 
         for bsz in range(batch_size):
-            selected_numbers = selected_numbers_batch[bsz]
-            if len(selected_numbers) == 0:
-                answer = ""
-            else:
-                if int(pred_task_class[bsz]) == 0:
-                    operand_one = first_numbers[bsz,0]
-                    operand_two = sec_numbers[bsz,0]
-                    if np.isnan(operand_one) or np.isnan(operand_two):
-                        answer = "yes"
-                    else:
-                        if int(pred_order[bsz,0]) == 0:
-                            if operand_one > operand_two:
-                                answer = "yes"
-                            else:
-                                answer = "no"
-                        else:
-                            if operand_two > operand_one:
-                                answer = "yes"
-                            else:
-                                answer = "no"
+            if int(pred_task_class[bsz]) == 0:
+                operand_one = first_numbers[bsz,0]
+                operand_two = sec_numbers[bsz,0]
+                if np.isnan(operand_one) or np.isnan(operand_two):
+                    answer = "yes"
                 else:
-                    selected_numbers_labels = [pred_ari_tags_class[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
-                    temp_ans = []
-                    for roud in range(self.num_ops):
-                        if "STP" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["STP"]:
-                            if roud == 0:
-                                answer = ""
-                                print("stop at first round")
-                            else:
-                                answer = temp_ans[-1]
-                            break
-                        roud_selected_numbers = [selected_numbers[i] for i in range(len(selected_numbers)) if selected_numbers_labels[i][roud] != 0]
-                        if roud > 0 :
-                            opt_selected_indexes = pred_opt_class[bsz,:,roud-1]
-                            opt_selected_numbers = [temp_ans[i] for i in range(roud) if opt_selected_indexes[i] != 0]
-                            roud_selected_numbers += opt_selected_numbers
-                        if len(roud_selected_numbers) == 0 and roud != 0:
-                            print("no numbers at round "+str(roud))
-                            print(pred_ari_class[bsz])
-                            print(selected_numbers_labels)
-                            print("----------------------------------------")
-                            if len(temp_ans) == 0:
-                                answer = ""
-                            else:
-                                answer  =temp_ans[-1]
-                            break
+                    if int(pred_order[bsz,0]) == 0:
+                        if operand_one > operand_two:
+                            answer = "yes"
                         else:
-                            if len(roud_selected_numbers) == 0:
-                                roud_selected_numbers = selected_numbers
-                            operand_one = np.nan
-                            operand_two = np.nan
-                            is_opt = False
-                            if roud > 0 :
-                                opt_selected_indexes = pred_opt_class[bsz,:,roud-1]
-                                opd1_opt_selected_numbers = [[pred_opd1_opt_scores[bsz,i,roud-1],temp_ans[i]] for i in range(roud) if opt_selected_indexes[i] == 1]
-                                opd2_opt_selected_numbers = [[pred_opd2_opt_scores[bsz,i,roud-1],temp_ans[i]] for i in range(roud) if opt_selected_indexes[i] == 2]
-                                if not opd1_opt_selected_numbers:
-                                    if not opd2_opt_selected_numbers:
-                                        operand_one = first_numbers[bsz,roud]
-                                        operand_two = sec_numbers[bsz,roud]
-                                    else:
-                                        best_opt_score = 0
-                                        for opd2_opt_number in opd2_opt_selected_numbers:
-                                            if opd2_opt_number[0] > best_opt_score:
-                                                operand_two = opd2_opt_number[1]
-                                                best_opt_score = opd2_opt_number[0]
-                                                is_opt = True
-                                        operand_one = top_numbers[bsz,roud]
-                                else:
-                                    best_opt_score = 0
-                                    for opd1_opt_number in opd1_opt_selected_numbers:
-                                        if opd1_opt_number[0] > best_opt_score:
-                                            operand_one = opd1_opt_number[1]
-                                            best_opt_score = opd1_opt_number[0]
-                                            is_opt = True
-                                    if not opd2_opt_selected_numbers:
-                                        operand_two = top_numbers[bsz,roud]
-                                    else:
-                                        best_opt_score = 0
-                                        for opd2_opt_number in opd2_opt_selected_numbers:
-                                            if opd2_opt_number[0] > best_opt_score:
-                                                operand_two = opd2_opt_number[1]
-                                                best_opt_score = opd2_opt_number[0]
-                                                is_opt = True
-                                            
-                            else:
+                            answer = "no"
+                    else:
+                        if operand_two > operand_one:
+                            answer = "yes"
+                        else:
+                            answer = "no"
+            else:
+                col_cell_indexes , col_cell_numbers = get_col_index_from_table_sequence(table_cell_tag_prediction[bsz], table_cell_numbers[bsz],col_index)
+                col_sequence_indexes = []
+                for sel_index in col_cell_indexes:
+                    col_sequence_indexes.append(torch.nonzero(table_cell_index[bsz] == sel_index).squeeze(-1))
+                
+                temp_ans = []
+                for roud in range(self.num_ops):
+                    if "STP" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["STP"]:
+                        if roud == 0:
+                            answer = ""
+                            print("stop at first round")
+                        else:
+                            answer = temp_ans[-1]
+                        break
+                    if roud > 0 :
+                        opt_selected_indexes = pred_opt_class[bsz,:,roud-1]
+                        opt_selected_numbers = [temp_ans[i] for i in range(roud) if opt_selected_indexes[i] != 0]
+                    operand_one = np.nan
+                    operand_two = np.nan
+                    is_opt = False
+                    if roud > 0 :
+                        opt_selected_indexes = pred_opt_class[bsz,:,roud-1]
+                        opd1_opt_selected_numbers = [[pred_opd1_opt_scores[bsz,i,roud-1],temp_ans[i]] for i in range(roud) if opt_selected_indexes[i] == 1]
+                        opd2_opt_selected_numbers = [[pred_opd2_opt_scores[bsz,i,roud-1],temp_ans[i]] for i in range(roud) if opt_selected_indexes[i] == 2]
+                        if not opd1_opt_selected_numbers:
+                            if not opd2_opt_selected_numbers:
                                 operand_one = first_numbers[bsz,roud]
                                 operand_two = sec_numbers[bsz,roud]
-                            
-                            if "add" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["add"]:
-                                temp_ans.append(operand_one + operand_two)
-                            elif "multiply" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["multiply"]:
-                                temp_ans.append(operand_one * operand_two)
-                            elif "subtract" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["subtract"]:
-                                if is_opt == True or int(pred_order[bsz,roud]) == 0:
-                                    temp_ans.append(operand_one - operand_two)
-                                else:
-                                    temp_ans.append(operand_two - operand_one)
-                            elif "divide" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["divide"]:
-                                if is_opt == True or int(pred_order[bsz,roud]) == 0:
-                                    if operand_two == 0:
-                                        answer  =temp_ans[-1]
-                                        break
-                                    temp_ans.append(operand_one / operand_two)
-                                else:
-                                    if operand_one == 0:
-                                        answer  =temp_ans[-1]
-                                        break
-                                    temp_ans.append(operand_two / operand_one)
-                            elif "table_average" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["table_average"]:
-                                temp_ans.append(np.mean(roud_selected_numbers))
-                                    current_ops[roud] = "Average"
-                                else:
-                                    
-                                    if np.isnan(operand_one) or np.isnan(operand_two):
-                                        if len(temp_ans) == 0:
-                                            answer = ""
-                                        else:
-                                            answer  =temp_ans[-1]
-                                        #current_ops = ["ignore"] * self.num_ops
-                                        current_ops[roud] = "Stop"
-                                        break
-                                    else:
-                                        if "DIFF" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["DIFF"]:
-                                            if is_opt == True or int(pred_order[bsz,roud]) == 0:
-                                                temp_ans.append(operand_one - operand_two)
-                                            else:
-                                                temp_ans.append(operand_two - operand_one)
-                                            current_ops[roud] = "Difference"
-                                        elif "DIVIDE" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["DIVIDE"]:
-                                            if is_opt == True or int(pred_order[bsz,roud]) == 0:
-                                                if operand_two == 0:
-                                                    answer  =temp_ans[-1]
-                                                    current_ops[roud] = "Stop"
-                                                    break
-                                                temp_ans.append(operand_one / operand_two)
-                                            else:
-                                                if operand_one == 0:
-                                                    answer  =temp_ans[-1]
-                                                    current_ops[roud] = "Stop"
-                                                    break
-                                                temp_ans.append(operand_two / operand_one)
-                                            current_ops[roud] = "Division"
-                                if roud == self.num_ops - 1:
-                                    answer = np.round(temp_ans[-1],4)
+                            else:
+                                best_opt_score = 0
+                                for opd2_opt_number in opd2_opt_selected_numbers:
+                                    if opd2_opt_number[0] > best_opt_score:
+                                        operand_two = opd2_opt_number[1]
+                                        best_opt_score = opd2_opt_number[0]
+                                        is_opt = True
+                                operand_one = top_numbers[bsz,roud]
+                        else:
+                            best_opt_score = 0
+                            for opd1_opt_number in opd1_opt_selected_numbers:
+                                if opd1_opt_number[0] > best_opt_score:
+                                    operand_one = opd1_opt_number[1]
+                                    best_opt_score = opd1_opt_number[0]
+                                    is_opt = True
+                            if not opd2_opt_selected_numbers:
+                                operand_two = top_numbers[bsz,roud]
+                            else:
+                                best_opt_score = 0
+                                for opd2_opt_number in opd2_opt_selected_numbers:
+                                    if opd2_opt_number[0] > best_opt_score:
+                                        operand_two = opd2_opt_number[1]
+                                        best_opt_score = opd2_opt_number[0]
+                                        is_opt = True             
+                    else:
+                        operand_one = first_numbers[bsz,roud]
+                        operand_two = sec_numbers[bsz,roud]               
+                    if "add" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["add"]:
+                        temp_ans.append(operand_one + operand_two)
+                    elif "multiply" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["multiply"]:
+                        temp_ans.append(operand_one * operand_two)
+                    elif "subtract" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["subtract"]:
+                        if is_opt == True or int(pred_order[bsz,roud]) == 0:
+                            temp_ans.append(operand_one - operand_two)
+                        else:
+                            temp_ans.append(operand_two - operand_one)
+                    elif "divide" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["divide"]:
+                        if is_opt == True or int(pred_order[bsz,roud]) == 0:
+                            if operand_two == 0:
+                                answer  =temp_ans[-1]
+                                break
+                            temp_ans.append(operand_one / operand_two)
+                        else:
+                            if operand_one == 0:
+                                answer  =temp_ans[-1]
+                                break
+                            temp_ans.append(operand_two / operand_one)
+                    elif "table_average" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["table_average"]:
+                        col_scores = []
+                        for j in range(len(col_cell_numbers)):
+                            col_scores.append(self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , col_sequence_indexes[j]],dim = 0).squeeze(0), 
+                                                                                opt_output[bsz,roud]),dim = -1))[1])
+                        best_col = col_scores.index(max(col_scores))
+                        selected_col_numbers = col_cell_numbers[best_col]
+                        try:
+                            temp_ans.append(np.mean(selected_col_numbers))
+                        except:
+                            if len(temp_ans) > 0:
+                                answer = temp_ans[-1]
+                                break
+                            else:
+                                answer = ""
+                                break
+                         
+                    if roud == self.num_ops - 1:
+                        answer = np.round(temp_ans[-1],4)
 
                 if answer != "":
                     answer = np.round(temp_ans[-1],4)
