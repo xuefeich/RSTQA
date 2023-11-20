@@ -651,7 +651,7 @@ class TagopModel(nn.Module):
             output_dict["question_id"].append(question_ids[bsz])
             output_dict["gold_answers"].append(gold_answers[bsz])
             
-            self._metrics({**gold_answers[bsz], "uid": question_ids[bsz],"answer":answer)
+            self._metrics({**gold_answers[bsz],"prediction":answer)
 
         return output_dict
 
