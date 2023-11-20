@@ -124,13 +124,11 @@ class TagopModel(nn.Module):
                  encoder,
                  config,
                  bsz,
-                 operator_classes: int,
                  ari_classes:int,
                  scale_classes: int,
                  num_ops : int,
+                 task_criterion: nn.CrossEntropyLoss = None,
                  operator_criterion: nn.CrossEntropyLoss = None,
-                 counter_criterion: nn.CrossEntropyLoss = None,
-                 ari_criterion: nn.CrossEntropyLoss = None,
                  opt_criterion: nn.CrossEntropyLoss = None,
                  order_criterion: nn.CrossEntropyLoss = None,
                  operand_criterion: nn.CrossEntropyLoss = None,
@@ -153,16 +151,17 @@ class TagopModel(nn.Module):
         self.hidden_size = hidden_size
         if dropout_prob is None:
             dropout_prob = self.config.hidden_dropout_prob
-        self.task_predictor = FFNLayer(hidden_size, hidden_size, scale_classes, dropout_prob)
+        self.task_predictor = FFNLayer(hidden_size, hidden_size, 2, dropout_prob)
         self.tag_predictor = FFNLayer(hidden_size,hidden_size,  2, dropout_prob)
         self.operand_predictor = FFNLayer(2*hidden_size, hidden_size, 2, dropout_prob)
         self.opt_predictor = FFNLayer(2*hidden_size, hidden_size, 3, dropout_prob)
         self.order_predictor = FFNLayer(3*hidden_size, hidden_size, 2, dropout_prob)
+        self.ari_predictor = FFNLayer(hidden_size,hidden_size, ari_classes, dropout_prob)
         self.task_criterion = task_criterion
-        self.ari_criterion = ari_criterion
         self.opt_criterion = opt_criterion
         self.order_criterion = order_criterion
         self.operand_criterion = operand_criterion
+        self.operator_criterion = operator_criterion
         # NLLLoss for tag_prediction
         self.NLLLoss = nn.NLLLoss(reduction="sum")
         self.ARI_CLASSES = ARITHMETIC_CLASSES_
