@@ -659,27 +659,16 @@ class TagopModel(nn.Module):
         self._metrics.reset()
 
     def get_metrics(self, logger=None, reset: bool = False) -> Dict[str, float]:
-        detail_em, detail_f1 = self._metrics.get_detail_metric()
         raw_detail = self._metrics.get_raw_pivot_table()
         exact_match, f1_score = self._metrics.get_overall_metric(reset)
         print(f"raw matrix:{raw_detail}\r\n")
-        print(f"detail em:{detail_em}\r\n")
-        print(f"detail f1:{detail_f1}\r\n")
         print(f"global em:{exact_match}\r\n")
         print(f"global f1:{f1_score}\r\n")
         if logger is not None:
             logger.info(f"raw matrix:{raw_detail}\r\n")
-            logger.info(f"detail em:{detail_em}\r\n")
-            logger.info(f"detail f1:{detail_f1}\r\n")
             logger.info(f"global em:{exact_match}\r\n")
             logger.info(f"global f1:{f1_score}\r\n") 
         return {'em': exact_match, 'f1': f1_score}
-
-    def get_df(self):
-        raws = self._metrics.get_raw()
-        detail_em, detail_f1 = self._metrics.get_detail_metric()
-        raw_detail = self._metrics.get_raw_pivot_table()
-        return detail_em, detail_f1, raws, raw_detail
 
 
 ### Beginning of everything related to segmented tensors ###
