@@ -125,7 +125,6 @@ class TagopModel(nn.Module):
                  config,
                  bsz,
                  ari_classes:int,
-                 scale_classes: int,
                  num_ops : int,
                  task_criterion: nn.CrossEntropyLoss = None,
                  operator_criterion: nn.CrossEntropyLoss = None,
@@ -134,9 +133,6 @@ class TagopModel(nn.Module):
                  operand_criterion: nn.CrossEntropyLoss = None,
                  hidden_size: int = None,
                  dropout_prob: float = None,
-                 arithmetic_op_index: List = None,
-                 op_mode: int = None,
-                 ablation_mode: int = None,
                  ):
         super(TagopModel, self).__init__()
         self.encoder = encoder
