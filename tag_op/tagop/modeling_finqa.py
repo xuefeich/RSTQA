@@ -591,6 +591,11 @@ class TagopModel(nn.Module):
                                 answer  =temp_ans[-1]
                                 break
                             temp_ans.append(operand_two / operand_one)
+                    elif "exp" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["exp"]:
+                        if is_opt == True or int(pred_order[bsz,roud]) == 0:
+                            temp_ans.append(operand_one ** operand_two)
+                        else:
+                            temp_ans.append(operand_two ** operand_one)
                     elif "table_average" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["table_average"]:
                         col_scores = []
                         for j in range(len(col_cell_numbers)):
@@ -638,63 +643,37 @@ class TagopModel(nn.Module):
                                 break
                             else:
                                 answer = ""
-                                break     
-                    if roud == self.num_ops - 1:
-                        answer = np.round(temp_ans[-1],4)
-
+                                break
                 if answer != "":
                     answer = np.round(temp_ans[-1],4)
-                    if SCALE[int(predicted_scale_class[bsz])] == "percent":
-                        answer = answer * 100
 
             output_dict["answer"].append(answer)
-            output_dict["scale"].append(SCALE[int(predicted_scale_class[bsz])])
             output_dict["question_id"].append(question_ids[bsz])
             output_dict["gold_answers"].append(gold_answers[bsz])
-
-            # if question_ids[bsz] in["4d259081-6da6-44bd-8830-e4de0031744c","22e20f25-669a-46b9-8779-2768ba391955","94ef7822-a201-493e-b557-a640f4ea4d83"]:
-            #     print(question_ids[bsz])
-            #     print(current_ops)
-            #     print(pred_operands)
-            #     print(pred_opt_class[bsz])
-            #     print(pred_order[bsz])
-            #     print("-----------------------------------------------")
             
-            self._metrics({**gold_answers[bsz], "uid": question_ids[bsz],"derivation":derivation[bsz]}, answer,
-                          SCALE[int(predicted_scale_class[bsz])], None, None,
-                          pred_op=current_ops, gold_op=gold_answers[bsz]["gold_ops"]
-                          ,pred_order = pred_order[bsz]
-                          #,pred_details = {"pred_numbers":selected_numbers_batch[bsz],"pred_operands":pred_operands}
-                          )
+            self._metrics({**gold_answers[bsz], "uid": question_ids[bsz],"answer":answer)
 
         return output_dict
 
     def reset(self):
         self._metrics.reset()
 
-    def set_metrics_mdoe(self, mode):
-        self._metrics = TaTQAEmAndF1(mode=mode)
-
     def get_metrics(self, logger=None, reset: bool = False) -> Dict[str, float]:
         detail_em, detail_f1 = self._metrics.get_detail_metric()
         raw_detail = self._metrics.get_raw_pivot_table()
-        exact_match, f1_score, scale_score, op_score ,order_score= self._metrics.get_overall_metric(reset)
+        exact_match, f1_score = self._metrics.get_overall_metric(reset)
         print(f"raw matrix:{raw_detail}\r\n")
         print(f"detail em:{detail_em}\r\n")
         print(f"detail f1:{detail_f1}\r\n")
         print(f"global em:{exact_match}\r\n")
         print(f"global f1:{f1_score}\r\n")
-        print(f"global scale:{scale_score}\r\n")
-        print(f"global op:{op_score}\r\n")
-        print(f"global order:{order_score}\r\n")
         if logger is not None:
             logger.info(f"raw matrix:{raw_detail}\r\n")
             logger.info(f"detail em:{detail_em}\r\n")
             logger.info(f"detail f1:{detail_f1}\r\n")
             logger.info(f"global em:{exact_match}\r\n")
-            logger.info(f"global f1:{f1_score}\r\n")
-            logger.info(f"global scale:{scale_score}\r\n")
-        return {'em': exact_match, 'f1': f1_score, "scale": scale_score}
+            logger.info(f"global f1:{f1_score}\r\n") 
+        return {'em': exact_match, 'f1': f1_score}
 
     def get_df(self):
         raws = self._metrics.get_raw()
