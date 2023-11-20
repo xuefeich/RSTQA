@@ -659,13 +659,10 @@ class TagopModel(nn.Module):
         self._metrics.reset()
 
     def get_metrics(self, logger=None, reset: bool = False) -> Dict[str, float]:
-        raw_detail = self._metrics.get_raw_pivot_table()
         exact_match, f1_score = self._metrics.get_overall_metric(reset)
-        print(f"raw matrix:{raw_detail}\r\n")
         print(f"global em:{exact_match}\r\n")
         print(f"global f1:{f1_score}\r\n")
         if logger is not None:
-            logger.info(f"raw matrix:{raw_detail}\r\n")
             logger.info(f"global em:{exact_match}\r\n")
             logger.info(f"global f1:{f1_score}\r\n") 
         return {'em': exact_match, 'f1': f1_score}
