@@ -88,31 +88,6 @@ def get_metrics(predicted: Union[str, List[str], Tuple[str, ...]],
     return exact_match, f1
 
 
-def extract_gold_answers(qa_annotation):
-    '''
-    span
-    multi-span
-    arithmetic (+ - * /)
-    count
-    date
-    other
-    gold answers is a list of list, each item in gold answers is a valid answer
-    '''
-    answer_type, scale = qa_annotation["answer_type"], qa_annotation['scale']
-    answer_content = qa_annotation['answer']
-    gold_answers = []
-    if answer_type in ['multi-span', 'span']: # list
-        assert isinstance(answer_content, list), answer_content
-        gold_answers = answer_content # multi-span
-    elif answer_type in ["arithmetic"]:
-        gold_answers.append(str(answer_content))
-    elif answer_type in ['count']:
-        gold_answers.append(str(int(answer_content)))
-    else:
-        gold_answers.append(str(answer_content))
-    return answer_type, gold_answers, scale
-
-
 def metric_max_over_ground_truths(metric_fn, predictions, ground_truths):
     scores_for_ground_truths = []
     for pred in predictions:
@@ -142,7 +117,7 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def get_answer_str(answers: list, scale: str):
+def get_answer_str(answers: list):
     """
     :param ans_type:  span, multi-span, arithmetic, count
     :param ans_list:
@@ -157,43 +132,17 @@ def get_answer_str(answers: list, scale: str):
         ans_str = str(ans)
         if is_number(ans_str):
             ans_num = to_number(ans_str)
-            if ans_num is None:
-                if scale:
-                    ans_str = ans_str + " " + str(scale)
-            else:
+            if ans_num is not None:
                 if '%' in ans_str: #  has been handled the answer itself is a percentage
                     ans_str = '%.4f' % ans_num
                 else:
-                    ans_str = '%.4f' % (round(ans_num, 2) * scale_to_num(scale))
-        else:
-            if scale:
-                ans_str = ans_str + " " + str(scale)
+                    ans_str = '%.4f' % (round(ans_num, 2))
         ans_temp.append(ans_str)
     return [" ".join(ans_temp)]
 
 
 # handle percentage
-def add_percent_pred(prediction_strings, pred_scale, pred):
-    """
-    to solve [pred = 0.2342] <>   [ans = 23.42 and scale == 'percent']
 
-    :param prediction_strings:
-    :param gold_ans_type:
-    :param gold_scale:
-    :param pred:
-    :return:
-    """
-    if len(pred) > 1:
-        return prediction_strings
-    pred_str = str(pred[0])
-    if pred_str is None:
-        return prediction_strings
-    if not pred_scale and '%' not in pred_str and is_number(pred_str): # mode only or no pred_scale num only
-        pred_str = to_number(pred_str)
-        if pred_str is None:
-            return prediction_strings
-        prediction_strings.append('%.4f' % pred_str)
-    return prediction_strings
 
 
 class TaTQAEmAndF1(object):
@@ -206,145 +155,40 @@ class TaTQAEmAndF1(object):
     def __init__(self) -> None:
         self._total_em = 0.0
         self._total_f1 = 0.0
-        self._scale_em = 0.0
-        self._op_em = 0.0
         self.f = open("hqa_pred_wrong.txt",'w')
-        self._order_em = 0.0
-        self._ordern = 0
-        self.op_correct_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0,  "Stop":0}
-        self.op_total_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0,  "Stop":0}
-        self.scale_correct_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
-        self.scale_total_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
         self._count = 0
         self._details = []
 
     def __call__(self,
                  ground_truth: dict,
                  prediction: Union[str, List],
-                 pred_scale="",
-                 pred_span = None,
-                 gold_span = None,
-                 pred_op=None,
-                 gold_op=None,
-                 pred_order = None,
-                 pred_details = None,
                  ):  # type: ignore
-        """
-        :param ground_truth:
-        :param prediction:
-        :param pred_scale:
-        :param pred_span:
-        :param gold_span:
-        :param pred_op:
-        :param gold_op:
-        :return:
-        """
-        order_labels = ground_truth["order_labels"]
-        if pred_op is not None:
-            for i in range(len(pred_op)):
-                try:
-                    if gold_op[i] != "ignore":
-                       if pred_op[i] == gold_op[i]:
-                           self.op_correct_count[pred_op[i]] += 1
-                           self._op_em += 1
-                       self._opn += 1
-                       self.op_total_count[gold_op[i]] += 1
-                    #self._op_em /= self._opn
-                except:
-                    print(gold_op)
-                    print(i)
-
-                if order_labels[i] != -100 and pred_order != None:
-                    self._ordern += 1
-                    if order_labels[i] == pred_order[i]:
-                        self._order_em += 1
-
-
-
-        if pred_scale == ground_truth["scale"]:
-            self.scale_correct_count[pred_scale] += 1
-
-        self.scale_total_count[ground_truth["scale"]] += 1
-        if not prediction:
             exact_match = 0
             f1_score = 0
-            span_exact_match = 0
-            span_f1_score = 0
         else:
-            gold_type, gold_answer, gold_scale = extract_gold_answers(ground_truth)
+            gold_answer= ground_truth["gold_answer"]
             if not gold_answer:
                 exact_match = 0
                 f1_score = 0
                 span_exact_match = 0
                 span_f1_score = 0
             else:
-                ground_truth_answer_strings = get_answer_str(gold_answer, gold_scale)
-
-                if gold_scale == pred_scale:
-                    self._scale_em += 1
+                ground_truth_answer_strings = get_answer_str([gold_answer])
                 prediction = prediction if isinstance(prediction, list) else [prediction]
-                prediction_strings = get_answer_str(prediction, pred_scale)
-                prediction_strings = add_percent_pred(prediction_strings, pred_scale, prediction)
-                #print(prediction)
-                #print(ground_truth_answer_strings)
+                prediction_strings = get_answer_str(prediction)
                 exact_match, f1_score = metric_max_over_ground_truths(
                         get_metrics,
                         prediction_strings,
                         ground_truth_answer_strings
                 )
 
-                if f1_score <1:
-                    self.f.write(ground_truth["uid"]+'\n')
-                    self.f.write("gold_answer "+str(gold_answer)+'\n')
-                    self.f.write("pred_answer "+str(prediction)+'\n')
-                    self.f.write(ground_truth["derivation"]+'\n')
-                    self.f.write(str(pred_details["ops"])+'\n')
-                    self.f.write(str(pred_details["numbers"])+'\n')
-                    self.f.write(str(pred_details["num_labels"])+'\n')
-                    try:
-                        self.f.write(str(pred_details["opt_class"])+'\n')
-                        self.f.write(str(pred_details["order"])+'\n')
-                    except:
-                        print("pred details err")
-                    self.f.write('-----------------------------------------------\n')
-                
-                #if gold_op[2] == "Stop" :
-                #    print(prediction_strings)
-                #    print(ground_truth_answer_strings)
-                #    print("-------------------------")
-                #print(exact_match)
-
-                #print(f1_score)
-                #print("---------------")
-                if gold_type in ['arithmetic', 'count']:
-                    """if gold type equals with arithmetic and count, set the f1_score == exact_match"""
-                    f1_score = exact_match
-                if not pred_span:
-                    span_exact_match = 0
-                    span_f1_score = 0
-                else:
-                    pred_span_strings = get_answer_str(pred_span, "")
-                    gold_span_strings = get_answer_str(gold_span, "")
-                    span_exact_match, span_f1_score = metric_max_over_ground_truths(
-                        get_metrics,
-                        pred_span_strings,
-                        gold_span_strings,
-                    )
-
         self._total_em += exact_match
         self._total_f1 += f1_score
         self._count += 1
         it = {**ground_truth,
               **{"pred":prediction,
-                 "pred_scale":pred_scale,
                  "em":exact_match,
-                 "f1":f1_score,
-                 "pred_span":pred_span,
-                 "gold_span":gold_span,
-                 "span_em":span_exact_match,
-                 "span_f1":span_f1_score}}
+                 "f1":f1_score,}}
         self._details.append(it)
 
     def get_overall_metric(self, reset: bool = False) -> Tuple[float, float, float, float]:
