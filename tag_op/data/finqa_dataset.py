@@ -626,8 +626,102 @@ class FinqaTrainReader(object):
 
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
-                       paragraph_tokens, table_cell_tokens, answer_dict, question_id, opt_mask, question_mask,col_index):
+                       tags_ground_truth, operator_ground_truth, paragraph_tokens,
+                       table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask, opt_labels,
+                       ari_labels, order_labels, question_mask,const_labels,const_indexes,const_list,col_index):
 
+        if ari_ops != None:
+            if ari_ops == [0] * self.num_ops:
+                print("no ari ops")
+                ari_ops = [-100] * self.num_ops
+            else:
+                get0 = False
+                for i in range(self.num_ops):
+                    if get0 == True:
+                        ari_ops[i] = -100
+                        order_labels[i] = -100
+                    if ari_ops[i] == 0:
+                        order_labels[i] = -100
+                        if get0 == False:
+                            get0 = True
+        else:
+            ari_ops = [-100] * self.num_ops
+
+        if ari_ops == [-100] * self.num_ops:
+            opt_labels[0, :, :] = -100
+            ari_labels[0, :, :] = -100
+            order_labels[1:] = -100
+            number_indexes = []
+            ari_sel_labels = []
+            if ari_ops[1] == 0:
+                opt_labels[0, :, :] = -100
+        else:
+            for i in range(1, self.num_ops - 1):
+                for j in range(i):
+                    opt_labels[0, i, j] = -100
+                if ari_ops[i] == 0:
+                    ari_labels[0, i:, :] = -100
+                    opt_labels[0, i - 1:, :] = -100
+                    opt_labels[0, :, i - 1:] = -100
+
+            number_indexes = []
+            cur_indexes = []
+            cur = 0
+            selected_indexes = torch.nonzero(tags_ground_truth[0]).squeeze(-1)
+            if len(selected_indexes) == 0:
+                print("no number")
+                return None
+            for sel in selected_indexes:
+                sel = int(sel)
+                if int(table_cell_index[0, sel]) != 0:
+                    if int(table_cell_index[0, sel]) == cur or cur_indexes == []:
+                        if cur_indexes == []:
+                            cur = int(table_cell_index[0, sel])
+                        cur_indexes.append(sel)
+                    else:
+                        cur = int(table_cell_index[0, sel])
+                        number_indexes.append(cur_indexes)
+                        cur_indexes = [sel]
+                else:
+                    if int(paragraph_index[0, sel]) == cur or cur_indexes == []:
+                        if cur_indexes == []:
+                            cur = int(paragraph_index[0, sel])
+                        cur_indexes.append(sel)
+                    else:
+                        cur = int(paragraph_index[0, sel])
+                        number_indexes.append(cur_indexes)
+                        cur_indexes = [sel]
+            number_indexes.append(cur_indexes)
+            distinct_si = []
+            for i, ni in enumerate(number_indexes):
+                distinct_si.append(ni[0])
+                p = 10 - len(ni)
+                if p > 0:
+                    number_indexes[i] += [0] * p
+                else:
+                    number_indexes[i] = number_indexes[i][:10]
+                    print("long number")
+                    print(ni)
+                    print(table_cell_index[0, ni])
+                    print(paragraph_index[0, ni])
+                    if int(table_cell_index[0, ni[0]]) != 0:
+                        print(table_cell_number_value[int(table_cell_index[0, ni[0]]) - 1])
+                    elif int(paragraph_index[0, ni[0]]) != 0:
+                        print(paragraph_number_value[int(paragraph_index[0, ni[0]]) - 1])
+                    else:
+                        print("extract err")  # if question_answer["uid"] in ignore_ids:
+
+            ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
+            if len(const_labels) > 0:
+               number_indexes  = const_indexes + number_indexes
+               const_labels = torch.from_numpy(np.array(const_labels))
+               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
+               for const in const_list:
+                   tags_ground_truth[0,const_dict[int(const)]] = 1
+            if ari_sel_labels.shape[0] != len(number_indexes):
+                print(ari_sel_labels)
+                print(number_indexes)
+                exit(0)
         opt_id = torch.nonzero(opt_mask == 1)[0, 1]
 
         return {
@@ -642,12 +736,21 @@ class FinqaTrainReader(object):
             "col_index" : np.array(col_index),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
+            "tag_labels": np.array(tags_ground_truth),
+            "operator_label": int(operator_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
             "answer_dict": answer_dict,
             "question_id": question_id,
+            "ari_ops": torch.LongTensor(ari_ops),
             "opt_mask": opt_id,
+            "order_labels": torch.LongTensor(order_labels),
+            "ari_labels": torch.LongTensor(np.array(ari_sel_labels)),
+            "selected_indexes": np.array(number_indexes),
+            "opt_labels": torch.LongTensor(np.array(opt_labels)),
         }
+
+
 
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer: str, derivation: str,question_id: str):
         question_text = question.strip()
@@ -960,102 +1063,8 @@ class FinqaTestReader(object):
 
     def _make_instance(self, input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
-                       tags_ground_truth, operator_ground_truth, paragraph_tokens,
-                       table_cell_tokens, answer_dict, question_id, ari_ops, opt_mask, opt_labels,
-                       ari_labels, order_labels, question_mask,const_labels,const_indexes,const_list,col_index):
+                       paragraph_tokens, table_cell_tokens, answer_dict, question_id, opt_mask, question_mask,col_index):
 
-        if ari_ops != None:
-            if ari_ops == [0] * self.num_ops:
-                print("no ari ops")
-                ari_ops = [-100] * self.num_ops
-            else:
-                get0 = False
-                for i in range(self.num_ops):
-                    if get0 == True:
-                        ari_ops[i] = -100
-                        order_labels[i] = -100
-                    if ari_ops[i] == 0:
-                        order_labels[i] = -100
-                        if get0 == False:
-                            get0 = True
-        else:
-            ari_ops = [-100] * self.num_ops
-
-        if ari_ops == [-100] * self.num_ops:
-            opt_labels[0, :, :] = -100
-            ari_labels[0, :, :] = -100
-            order_labels[1:] = -100
-            number_indexes = []
-            ari_sel_labels = []
-            if ari_ops[1] == 0:
-                opt_labels[0, :, :] = -100
-        else:
-            for i in range(1, self.num_ops - 1):
-                for j in range(i):
-                    opt_labels[0, i, j] = -100
-                if ari_ops[i] == 0:
-                    ari_labels[0, i:, :] = -100
-                    opt_labels[0, i - 1:, :] = -100
-                    opt_labels[0, :, i - 1:] = -100
-
-            number_indexes = []
-            cur_indexes = []
-            cur = 0
-            selected_indexes = torch.nonzero(tags_ground_truth[0]).squeeze(-1)
-            if len(selected_indexes) == 0:
-                print("no number")
-                return None
-            for sel in selected_indexes:
-                sel = int(sel)
-                if int(table_cell_index[0, sel]) != 0:
-                    if int(table_cell_index[0, sel]) == cur or cur_indexes == []:
-                        if cur_indexes == []:
-                            cur = int(table_cell_index[0, sel])
-                        cur_indexes.append(sel)
-                    else:
-                        cur = int(table_cell_index[0, sel])
-                        number_indexes.append(cur_indexes)
-                        cur_indexes = [sel]
-                else:
-                    if int(paragraph_index[0, sel]) == cur or cur_indexes == []:
-                        if cur_indexes == []:
-                            cur = int(paragraph_index[0, sel])
-                        cur_indexes.append(sel)
-                    else:
-                        cur = int(paragraph_index[0, sel])
-                        number_indexes.append(cur_indexes)
-                        cur_indexes = [sel]
-            number_indexes.append(cur_indexes)
-            distinct_si = []
-            for i, ni in enumerate(number_indexes):
-                distinct_si.append(ni[0])
-                p = 10 - len(ni)
-                if p > 0:
-                    number_indexes[i] += [0] * p
-                else:
-                    number_indexes[i] = number_indexes[i][:10]
-                    print("long number")
-                    print(ni)
-                    print(table_cell_index[0, ni])
-                    print(paragraph_index[0, ni])
-                    if int(table_cell_index[0, ni[0]]) != 0:
-                        print(table_cell_number_value[int(table_cell_index[0, ni[0]]) - 1])
-                    elif int(paragraph_index[0, ni[0]]) != 0:
-                        print(paragraph_number_value[int(paragraph_index[0, ni[0]]) - 1])
-                    else:
-                        print("extract err")  # if question_answer["uid"] in ignore_ids:
-
-            ari_sel_labels = ari_labels[0, :, distinct_si].transpose(0, 1)
-            if len(const_labels) > 0:
-               number_indexes  = const_indexes + number_indexes
-               const_labels = torch.from_numpy(np.array(const_labels))
-               ari_sel_labels = torch.cat((const_labels,ari_sel_labels),dim = 0)
-               for const in const_list:
-                   tags_ground_truth[0,const_dict[int(const)]] = 1
-            if ari_sel_labels.shape[0] != len(number_indexes):
-                print(ari_sel_labels)
-                print(number_indexes)
-                exit(0)
         opt_id = torch.nonzero(opt_mask == 1)[0, 1]
 
         return {
@@ -1070,20 +1079,12 @@ class FinqaTestReader(object):
             "col_index" : np.array(col_index),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
-            "tag_labels": np.array(tags_ground_truth),
-            "operator_label": int(operator_ground_truth),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
             "answer_dict": answer_dict,
             "question_id": question_id,
-            "ari_ops": torch.LongTensor(ari_ops),
             "opt_mask": opt_id,
-            "order_labels": torch.LongTensor(order_labels),
-            "ari_labels": torch.LongTensor(np.array(ari_sel_labels)),
-            "selected_indexes": np.array(number_indexes),
-            "opt_labels": torch.LongTensor(np.array(opt_labels)),
         }
-
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer: str, derivation: str,question_id: str):
         question_text = question.strip()
         table_cell_tokens, table_ids,table_cell_number_value, table_cell_index,col_index = table_tokenize(table, self.tokenizer)
