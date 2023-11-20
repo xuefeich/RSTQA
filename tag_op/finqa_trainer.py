@@ -7,13 +7,11 @@ from tag_op import options
 import torch
 import torch.nn as nn
 from pprint import pprint
-from tag_op.data.hqa_data_util import get_op_1, get_arithmetic_op_index_1, get_op_2, get_arithmetic_op_index_2
-from tag_op.data.hqa_data_util import get_op_3, get_arithmetic_op_index_3
-from tag_op.data.hqa_data_util import OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
+from tag_op.data.finqa_data_util import ARI_CLASSES_
 from tag_op.tagop.util import create_logger, set_environment
-from tag_op.data.hqa_batch_gen import TaTQABatchGen, TaTQATestBatchGen
+from tag_op.data.finqa_batch_gen import TaTQABatchGen, TaTQATestBatchGen
 from transformers import RobertaModel, BertModel
-from tag_op.tagop.modeling_rstqa_hqa import TagopModel
+from tag_op.tagop.modeling_finqa import TagopModel
 from tag_op.tagop.model import TagopFineTuningModel
 from pathlib import Path
 parser = argparse.ArgumentParser("TagOp training task.")
@@ -50,10 +48,7 @@ def main():
     best_result = float("-inf")
     logger.info("Loading data...")
     train_itr = TaTQABatchGen(args, data_mode = "train", encoder=args.encoder,num_ops = args.num_ops)
-    if args.ablation_mode != 3:
-        dev_itr = TaTQATestBatchGen(args, data_mode="dev", encoder=args.encoder,num_ops = args.num_ops)
-    else:
-        dev_itr = TaTQABatchGen(args, data_mode="dev", encoder=args.encoder)
+    dev_itr = TaTQATestBatchGen(args, data_mode="dev", encoder=args.encoder,num_ops = args.num_ops)
 
     num_train_steps = int(args.max_epoch * len(train_itr) / args.gradient_accumulation_steps)
     logger.info("Num update steps {}!".format(num_train_steps))
@@ -83,30 +78,19 @@ def main():
     else:
         arithmetic_op_index = get_arithmetic_op_index_3(args.op_mode)
 
-    # with open("ari_operator_ids.json",'r',encoding='utf-8') as fr:
-    #     ari_operator_ids = json.load(fr)
-    #     fr.close()
     print(bert_model.config)
     bert_model.resize_token_embeddings(bert_model.config.vocab_size+1)
     network = TagopModel(
         encoder = bert_model,
         config = bert_model.config,
         bsz = args.batch_size,
-        operator_classes = len(operators),
-        ari_classes = len(ARITHMETIC_CLASSES_),
-        scale_classes = 5,
+        ari_classes = len(ARI_CLASSES_),
         num_ops = args.num_ops,
-        ari_criterion = nn.CrossEntropyLoss(reduction = "sum"),
-        ari_operator_criterion = nn.CrossEntropyLoss(),
-        operator_criterion = nn.CrossEntropyLoss(),
-        counter_criterion = nn.CrossEntropyLoss(),
-        scale_criterion = nn.CrossEntropyLoss(),
+        operator_criterion = nn.CrossEntropyLoss(reduction = "sum"),
+        operand_criterion = nn.CrossEntropyLoss(),
+        task_criterion = nn.CrossEntropyLoss(),
         opt_criterion = nn.CrossEntropyLoss(reduction = "sum"),
         order_criterion = nn.CrossEntropyLoss(reduction = "sum"),
-        arithmetic_op_index = arithmetic_op_index,
-        op_mode = args.op_mode,
-        ablation_mode = args.ablation_mode,
-        #ari_operator_ids = ari_operator_ids,
     )
     logger.info("Build optimizer etc...")
 
@@ -124,20 +108,14 @@ def main():
         #exit(0)
         for step, batch in enumerate(train_itr):
             model.update(batch,epoch = epoch)
-            #exit(0)
             if model.step % (args.log_per_updates * args.gradient_accumulation_steps) == 0 or model.step == 1:
                 logger.info("Updates[{0:6}] train loss[{1:.5f}] remaining[{2}].\r\n".format(
                     model.updates, model.train_loss.avg,
                     str((datetime.now() - train_start) / (step + 1) * (num_train_steps - step - 1)).split('.')[0]))
                 model.avg_reset()
-        #model.get_metrics(logger)
-
         model.reset()
         model.avg_reset()
-        #if epoch >2:
         model.predict(dev_itr)
-        #save_prefix = os.path.join(args.save_dir, "checkpoint_best")
-        #model.save(save_prefix, epoch)
         metrics = model.get_metrics(logger)
         model.avg_reset()
         if metrics["f1"] > best_result:
