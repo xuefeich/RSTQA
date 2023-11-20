@@ -155,7 +155,6 @@ class TaTQAEmAndF1(object):
     def __init__(self) -> None:
         self._total_em = 0.0
         self._total_f1 = 0.0
-        self.f = open("hqa_pred_wrong.txt",'w')
         self._count = 0
         self._details = []
 
@@ -170,8 +169,6 @@ class TaTQAEmAndF1(object):
             if not gold_answer:
                 exact_match = 0
                 f1_score = 0
-                span_exact_match = 0
-                span_f1_score = 0
             else:
                 ground_truth_answer_strings = get_answer_str([gold_answer])
                 prediction = prediction if isinstance(prediction, list) else [prediction]
@@ -200,38 +197,9 @@ class TaTQAEmAndF1(object):
         """
         exact_match = self._total_em / self._count if self._count > 0 else 0
         f1_score = self._total_f1 / self._count if self._count > 0 else 0
-        scale_score = self._scale_em / self._count if self._count > 0 else 0
-        op_score = self._op_em / self._opn if self._opn > 0 else 0
-        order_score = self._order_em / self._ordern if self._ordern >0 else 0
-        op_em_detail = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                               "Multiplication": 0, "Division": 0, "Difference": 0,"ratio increasing": 0, "ratio decreasing": 0,  "Stop": 0}
-        scale_em_detail = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
-        for k in op_em_detail.keys():
-            op_em_detail[k] = self.op_correct_count[k] / self.op_total_count[k] if self.op_total_count[k] > 0 else 0
-
-        for k in scale_em_detail.keys():
-            scale_em_detail[k] = self.scale_correct_count[k] / self.scale_total_count[k] if self.scale_total_count[k] > 0 else 0
-
         if reset:
             self.reset()
-        return exact_match, f1_score, scale_score, op_score,order_score
-
-    def get_detail_metric(self):
-        df = pd.DataFrame(self._details)
-        if len(self._details) == 0:
-            return None, None
-        em_pivot_tab = df.pivot_table(index='answer_type', values=['em'],
-                                    columns=['answer_from'], aggfunc='mean').fillna(0)
-
-        f1_pivot_tab = df.pivot_table(index='answer_type', values=['f1'],
-                                    columns=['answer_from'], aggfunc='mean').fillna(0)
-        return em_pivot_tab, f1_pivot_tab
-
-    def get_raw_pivot_table(self):
-        df = pd.DataFrame(self._details)
-        pivot_tab = df.pivot_table(index='answer_type', values=['em'],
-                                  columns=['answer_from'], aggfunc='count').fillna(0)
-        return pivot_tab
+        return exact_match, f1_score
 
     def get_raw(self):
         return self._details
@@ -239,19 +207,8 @@ class TaTQAEmAndF1(object):
     def reset(self):
         self._total_em = 0.0
         self._total_f1 = 0.0
-        self._scale_em = 0.0
-        self._op_em = 0.0
         self._count = 0
-        self._opn = 0
-        self._order_em = 0.0
-        self._ordern = 0
         self._details = []
-        self.op_correct_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0, "Stop":0}
-        self.op_total_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                "Multiplication": 0, "Division": 0, "Difference": 0, "ratio increasing": 0, "ratio decreasing": 0, "Stop":0}
-        self.scale_correct_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
-        self.scale_total_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
 
     def __str__(self):
         return f"TaTQAEmAndF1(em={self._total_em}, f1={self._total_f1}, count={self._count})"
