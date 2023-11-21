@@ -187,25 +187,19 @@ class TaTQATestBatchGen(object):
             table_mask = torch.from_numpy(item["table_mask"])
             paragraph_numbers = item["paragraph_number_value"]
             table_cell_numbers = item["table_cell_number_value"]
+            col_index = item["col_index"]
             paragraph_index = torch.from_numpy(item["paragraph_index"])
             table_cell_index = torch.from_numpy(item["table_cell_index"])
-            tag_labels = torch.from_numpy(item["tag_labels"])
             gold_answers = item["answer_dict"]
             paragraph_tokens = item["paragraph_tokens"]
             table_cell_tokens = item["table_cell_tokens"]
             question_id = item["question_id"]
-            derivation = item["derivation"]
-            #ari_ops = item["ari_ops"]
             opt_mask = item["opt_mask"]
-
-            question_mask = torch.from_numpy(item["question_mask"])
-            #truth_numbers = item["truth_numbers"]
-            #opt_index = item["opt_index"]
 
 
             all_data.append((input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask, paragraph_index,
-                             table_cell_index, tag_labels, gold_answers, paragraph_tokens, table_cell_tokens,
-                             paragraph_numbers, table_cell_numbers, question_id,opt_mask,derivation,question_mask))
+                             table_cell_index, gold_answers, paragraph_tokens, table_cell_tokens,
+                             paragraph_numbers, table_cell_numbers, col_index,question_id,opt_mask))
         print("Load data size {}.".format(len(all_data)))
         self.data = TaTQATestBatchGen.make_batches(all_data, args.batch_size if self.is_train else args.eval_batch_size,
                                                self.is_train)
@@ -239,22 +233,17 @@ class TaTQATestBatchGen(object):
             batch = self.data[self.offset]
             self.offset += 1
             input_ids_batch, attention_mask_batch, token_type_ids_batch, paragraph_mask_batch, table_mask_batch, \
-            paragraph_index_batch, table_cell_index_batch, tag_labels_batch, gold_answers_batch, paragraph_tokens_batch, \
-            table_cell_tokens_batch, paragraph_numbers_batch, table_cell_numbers_batch, question_ids_batch,opt_mask_batch,derivation_batch,question_mask_batch = zip(*batch)
+            paragraph_index_batch, table_cell_index_batch,  gold_answers_batch, paragraph_tokens_batch, \
+            table_cell_tokens_batch, paragraph_numbers_batch, table_cell_numbers_batch, col_index_batch,question_ids_batch,opt_mask_batch = zip(*batch)
             bsz = len(batch)
             input_ids = torch.LongTensor(bsz, 512)
             attention_mask = torch.LongTensor(bsz, 512)
-            #token_type_ids = torch.LongTensor(bsz, 512).fill_(0)
-            token_type_ids = torch.LongTensor(bsz, 512,7)
+            token_type_ids = torch.LongTensor(bsz, 512).fill_(0)
             paragraph_mask = torch.LongTensor(bsz, 512)
             table_mask = torch.LongTensor(bsz, 512)
             paragraph_index = torch.LongTensor(bsz, 512)
             table_cell_index = torch.LongTensor(bsz, 512)
-            tag_labels = torch.LongTensor(bsz, 512)
-            question_mask = torch.LongTensor(bsz,512)
             opt_mask = torch.LongTensor(bsz)
-            #opt_index = torch.LongTensor(bsz,self.num_ops,1024)
-            #ari_ops = torch.LongTensor(bsz,self.num_ops)
 
 
             paragraph_tokens = []
@@ -264,9 +253,7 @@ class TaTQATestBatchGen(object):
             question_ids = []
             paragraph_numbers = []
             table_cell_numbers = []
-            #truth_numbers = []
-
-            derivation = []
+            col_index = []
 
             for i in range(bsz):
                 input_ids[i] = input_ids_batch[i]
@@ -276,28 +263,20 @@ class TaTQATestBatchGen(object):
                 table_mask[i] = table_mask_batch[i]
                 paragraph_index[i] = paragraph_index_batch[i]
                 table_cell_index[i] = table_cell_index_batch[i]
-                tag_labels[i] = tag_labels_batch[i]
                 paragraph_tokens.append(paragraph_tokens_batch[i])
                 table_cell_tokens.append(table_cell_tokens_batch[i])
                 paragraph_numbers.append(paragraph_numbers_batch[i])
                 table_cell_numbers.append(table_cell_numbers_batch[i])
+                col_index.append(col_index_batch[i])
                 gold_answers.append(gold_answers_batch[i])
                 question_ids.append(question_ids_batch[i])
-                derivation.append(derivation_batch[i])
-                #truth_numbers.append(truth_numbers_batch[i])
-                question_mask[i] = question_mask_batch[i]
-
                 opt_mask[i] = opt_mask_batch[i]
-                #opt_index[i] = opt_index_batch[i]
-                #ari_ops[i] = ari_ops_batch[i]
             out_batch = {"input_ids": input_ids, "attention_mask": attention_mask, "token_type_ids": token_type_ids,
-                         "paragraph_mask": paragraph_mask, "paragraph_index": paragraph_index, "tag_labels": tag_labels,
+                         "paragraph_mask": paragraph_mask, "paragraph_index": paragraph_index, 
                          "paragraph_tokens": paragraph_tokens, "table_cell_tokens": table_cell_tokens,
                          "paragraph_numbers": paragraph_numbers,
-                         "table_cell_numbers": table_cell_numbers, "gold_answers": gold_answers, "question_ids": question_ids,
-                         "table_mask": table_mask, "table_cell_index": table_cell_index,"opt_mask":opt_mask,"derivation":derivation,"question_mask":question_mask
-                         # "paragraph_mapping_content": paragraph_mapping_content,
-                         # "table_mapping_content": table_mapping_content,
+                         "table_cell_numbers": table_cell_numbers, "col_index" : col_index, "gold_answers": gold_answers, "question_ids": question_ids,
+                         "table_mask": table_mask, "table_cell_index": table_cell_index,"opt_mask":opt_mask
                          }
 
             if self.args.cuda:
