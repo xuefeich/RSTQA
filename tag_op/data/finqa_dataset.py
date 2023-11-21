@@ -1133,10 +1133,7 @@ class FinqaTestReader(object):
             derivation = one['qa']["program"]
             if isinstance(exe_ans,float):
                 exe_ans = str(np.round(exe_ans,4))
-            try:
-               instance = self._to_instance(question, table, para_dicts, str(exe_ans), derivation, one["id"])
-            except:
-               continue
+            instance = self._to_instance(question, table, para_dicts, str(exe_ans), derivation, one["id"])
             if instance is not None:
                 instances.append(instance)
         return instances
