@@ -159,6 +159,43 @@ def tokenize_answer(answer):
             prev_is_whitespace = False
     return answer_tokens
 
+
+def question_tokenizer(string: str, tokenizer) -> List[int]:
+    if not string:
+        return [],[]
+    tokens = []
+    question_numbers = []
+    prev_is_whitespace = True
+    for i, c in enumerate(string):
+        if is_whitespace(c):  # or c in ["-", "–", "~"]:
+            prev_is_whitespace = True
+        elif c in ["-", "–", "~"]:
+            tokens.append(c)
+            prev_is_whitespace = True
+        else:
+            if prev_is_whitespace:
+                tokens.append(c)
+            else:
+                tokens[-1] += c
+            prev_is_whitespace = False  # char_to_word_offset.append(len(tokens) - 1)
+
+    split_tokens = []
+    for i, token in enumerate(tokens):
+        if i != 0:
+            sub_tokens = tokenizer._tokenize(" " + token)
+        else:
+            sub_tokens = tokenizer._tokenize(token)
+        number = to_number(token)
+        if number is not None:
+            qnumber = float(number)
+        else:
+            qnumber = np.nan
+        for sub_token in sub_tokens:
+            split_tokens.append(sub_token)
+            question_numbers.append(qnumber)
+    ids = tokenizer.convert_tokens_to_ids(split_tokens)
+    return ids , question_numbers
+    
 def string_tokenizer(string: str, tokenizer) -> List[int]:
     if not string:
         return []
@@ -186,7 +223,6 @@ def string_tokenizer(string: str, tokenizer) -> List[int]:
 
         for sub_token in sub_tokens:
             split_tokens.append(sub_token)
-
     ids = tokenizer.convert_tokens_to_ids(split_tokens)
     return ids
 
