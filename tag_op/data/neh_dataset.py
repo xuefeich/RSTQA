@@ -750,7 +750,7 @@ class TagTaTQAReader(object):
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
                         tags_ground_truth, operator_ground_truth, scale_ground_truth,paragraph_tokens, 
                         table_cell_tokens, answer_dict, question_id, ari_ops,opt_mask,opt_index,opt_labels,
-                       ari_labels,order_labels,question_mask,opd_ids,opd_mask):
+                       ari_labels,order_labels,question_mask,ids_numbers):
 
         if ari_ops != None:
             ari_ops_padding = self.num_ops - len(ari_ops)
@@ -862,14 +862,13 @@ class TagTaTQAReader(object):
         return {
             "input_ids": np.array(input_ids),
             "attention_mask": np.array(attention_mask),
-            "opd_ids":np.array(opd_ids),
-            "opd_mask":np.array(opd_mask),
             "token_type_ids": np.array(token_type_ids),
             "paragraph_mask": np.array(paragraph_mask),
             "table_mask": np.array(table_mask),
             "question_mask" : np.array(question_mask),
             "paragraph_number_value": np.array(paragraph_number_value),
             "table_cell_number_value": np.array(table_cell_number_value),
+            "ids_numbers" : np.array(ids_numbers),
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
             "tag_labels": np.array(tags_ground_truth),
