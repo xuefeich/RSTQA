@@ -160,7 +160,7 @@ def tokenize_answer(answer):
     return answer_tokens
 
 
-def question_tokenizer(string: str, tokenizer) -> List[int]:
+def question_numbers_tokenizer(string: str, tokenizer) -> List[int]:
     if not string:
         return [],[]
     tokens = []
@@ -505,7 +505,7 @@ def paragraph_test_tokenize(question, paragraphs, tokenizer, mapping, answer_typ
 
 
 def question_tokenizer(question_text, tokenizer):
-    return string_tokenizer(question_text, tokenizer)
+    return question_numbers_tokenizer(question_text, tokenizer)
 
 
 def _concat(question_ids,
@@ -523,7 +523,10 @@ def _concat(question_ids,
             passage_length_limitation,
             max_pieces,
             num_ops,
-            ari_tags,):
+            ari_tags,
+            question_numbers,
+            table_ids_numbers,
+            para_ids_numbers):
     in_table_cell_index = table_cell_index.copy()
     in_paragraph_index = paragraph_index.copy()
     input_ids = torch.zeros([1, max_pieces])
@@ -535,6 +538,7 @@ def _concat(question_ids,
     table_index = torch.zeros_like(input_ids)
     opt_mask = torch.zeros_like(input_ids)
     opt_index = torch.zeros_like(input_ids)
+    ids_numbers = [np.nan] + question_numbers + [np.nan]
     tags = torch.zeros_like(input_ids)
     opd_two_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
     ari_round_tags = torch.zeros([1,num_ops,input_ids.shape[1]])
@@ -566,6 +570,7 @@ def _concat(question_ids,
 
     passage_ids = passage_ids + [sep] + num_ops * [opt] + [sep]
 
+    ids_numbers = ids_numbers + table_ids_numbers[:table_length] + [np.nan] + para_ids_numbers[:paragraph_length]
     input_ids[0, :question_length] = torch.from_numpy(np.array(question_ids))
     input_ids[0, question_length:question_length + len(passage_ids)] = torch.from_numpy(np.array(passage_ids))
     attention_mask = input_ids != 0
@@ -622,7 +627,7 @@ def _concat(question_ids,
     del in_paragraph_index
 
     return input_ids, attention_mask, paragraph_mask, paragraph_index, table_mask,  table_index, tags, \
-            input_segments,opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask,question_length,question_length + table_length + paragraph_length
+            input_segments,opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask, ids_numbers
 
 def _test_concat(question_ids,
                 table_ids,
@@ -885,10 +890,10 @@ class TagTaTQAReader(object):
     def _to_instance(self, question: str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
                      answer_type: str, answer:str, derivation: str, facts:list,  answer_mapping: Dict, scale: str, question_id:str):
         question_text = question.strip()
-        table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index = \
+        table_cell_tokens, table_ids, table_tags, table_cell_number_value, table_cell_index,table_ids_numbers = \
                             table_tokenize(table, self.tokenizer, answer_mapping, answer_type)
         paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_word_piece_mask, paragraph_number_mask, \
-                paragraph_number_value, paragraph_index= \
+                paragraph_number_value, paragraph_index , para_ids_numbers= \
             paragraph_tokenize(question, paragraphs, self.tokenizer, answer_mapping, answer_type)
 
         '''
@@ -964,11 +969,11 @@ class TagTaTQAReader(object):
                                   elif operand_one_mapping["paragraph"][opd1_pid][0][0] > operand_two_mapping["paragraph"][opd2_pid][0][0]:
                                       order_labels[i] = 1
 
-                              _,_,op1_table_tags,_,_ = table_tokenize(table,self.tokenizer,operand_one_mapping,answer_type)
+                              _,_,op1_table_tags,_,_,_ = table_tokenize(table,self.tokenizer,operand_one_mapping,answer_type)
 
-                              _,_,op1_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_one_mapping, answer_type)
-                              _,_,op2_table_tags,_,_ = table_tokenize(table,self.tokenizer,operand_two_mapping,answer_type)
-                              _,_,op2_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_two_mapping, answer_type)
+                              _,_,op1_para_tags,_,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_one_mapping, answer_type)
+                              _,_,op2_table_tags,_,_,_ = table_tokenize(table,self.tokenizer,operand_two_mapping,answer_type)
+                              _,_,op2_para_tags,_,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, operand_two_mapping, answer_type)
                               ari_tags['table'].append({"operand1":op1_table_tags,"operand2":op2_table_tags})
                               ari_tags['para'].append({"operand1":op1_para_tags,"operand2":op2_para_tags})
                               op1_tags = [0] * self.num_ops
@@ -982,8 +987,8 @@ class TagTaTQAReader(object):
                               ari_tags['operation'].append({"operand1":op1_tags,"operand2":op2_tags})
 
                            else:
-                              _,_,temp_table_tags,_,_ = table_tokenize(table,self.tokenizer,temp_mapping,answer_type)
-                              _,_,temp_para_tags,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, temp_mapping, answer_type)
+                              _,_,temp_table_tags,_,_,_ = table_tokenize(table,self.tokenizer,temp_mapping,answer_type)
+                              _,_,temp_para_tags,_,_,_,_,_ = paragraph_tokenize(question, paragraphs, self.tokenizer, temp_mapping, answer_type)
                               ari_tags['table'].append(temp_table_tags)
                               ari_tags['para'].append(temp_para_tags)
                               temp_op_tags = [0] * self.num_ops
@@ -1021,47 +1026,21 @@ class TagTaTQAReader(object):
             column_relation[column_name] = str(column_name)
         table.rename(columns=column_relation, inplace=True)
 
-        question_ids = question_tokenizer(question_text, self.tokenizer)
-
-        
-        # opd_ids = torch.zeros([1, self.max_pieces])
-        # opd_list = question_tokenizer(opdtext, self.tokenizer)
-        # opdpad = self.max_pieces - len(opd_list)
-        # if opdpad > 0:
-        #     opd_list +=[0] *opdpad
-        # else:
-        #     opd_list = opd_list[:self.max_pieces]
-        # opd_ids[0] = torch.from_numpy(np.array(opd_list))
-        # opd_mask = opd_ids != 0
+        question_ids, question_numbers = question_tokenizer(question_text, self.tokenizer)
         
 
         input_ids, attention_mask, paragraph_mask,  paragraph_index, \
-        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask,ql,qtpl = \
+        table_mask, table_index, tags, token_type_ids , opt_mask,opt_index,ari_round_tags,opd_two_tags,ari_round_labels,question_mask, ids_numbers = \
             _concat(question_ids, table_ids, table_tags, table_cell_index, 
                     paragraph_ids, paragraph_tags, paragraph_index,
                     self.sep,self.opt,self.question_length_limit,
-                    self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags)
+                    self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags , question_numbers,table_ids_numbers , para_ids_numbers )
 
-
-        opd_ids = torch.zeros([1, self.max_pieces])
-        opdtext =  ' '.join([str(i) for i in tags[0]])
-        opd_list = question_tokenizer(opdtext, self.tokenizer)
-        opdpad = self.max_pieces - len(opd_list)
-        if opdpad > 0:
-            opd_list +=[0] *opdpad
-        else:
-            opd_list = opd_list[:self.max_pieces]
-        opd_ids[0] = torch.from_numpy(np.array(opd_list))
-        opd_mask = torch.zeros([1, self.max_pieces])
-        opd_mask[0,ql :qtpl] = 1
         
         opt_labels = torch.zeros(1,self.num_ops - 1 , self.num_ops-1)
-        #whole_tags = combine_tags(ari_round_tags,opd_two_tags)
         if answer_type == "arithmetic":
-            #tags = whole_tags
             ari_round_labels = torch.where(tags > 0 ,ari_round_labels,-100)
             if len(ari_ops) >= 2:
-                #print(ari_tags["operation"])
                 for i in range(1 , len(ari_ops)):
                     opt_tags = ari_tags["operation"][i]
                     if isinstance(opt_tags , dict):
@@ -1081,7 +1060,7 @@ class TagTaTQAReader(object):
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                     paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, operator_class, scale_class,
                     paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,
-                    ari_round_labels,order_labels,question_mask,opd_ids,opd_mask)
+                    ari_round_labels,order_labels,question_mask,ids_numbers)
 
 
     def _read(self, file_path: str):
