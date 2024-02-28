@@ -282,6 +282,7 @@ def paragraph_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
     tags = []
     word_piece_mask = []
     paragraph_index = []
+    para_ids_numbers = []
 
     paragraph_mapping = False
     paragraph_mapping_orders = []
@@ -351,19 +352,22 @@ def paragraph_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
 
         number = to_number(token)
         if number is not None:
-            number_value.append(float(number))
+            pnumber = float(number)
+            number_value.append(pnumber)
         else:
+            pnumber = np.nan
             number_value.append(np.nan)
         for sub_token in sub_tokens:
             split_tags.append(tags[i])
             split_tokens.append(sub_token)
             paragraph_index.append(current_token_index)
+            para_ids_numbers.append(pnumber)
         current_token_index+=1
         word_piece_mask += [1]
         if len(sub_tokens) > 1:
             word_piece_mask += [0] * (len(sub_tokens) - 1)
     paragraph_ids = tokenizer.convert_tokens_to_ids(split_tokens)
-    return tokens, paragraph_ids, split_tags, word_piece_mask, number_mask, number_value, paragraph_index
+    return tokens, paragraph_ids, split_tags, word_piece_mask, number_mask, number_value, paragraph_index,para_ids_numbers
 
 def paragraph_test_tokenize(question, paragraphs, tokenizer, mapping, answer_type):
     mapping_content = []
