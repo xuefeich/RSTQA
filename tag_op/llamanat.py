@@ -113,6 +113,29 @@ class LlamaForTAT(LlamaPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
+        self.operator_classes = len(OPERATOR_CLASSES_)
+        self.ari_classes = len(ARITHMETIC_CLASSES_)
+        self.scale_classes = len(SCALE)
+        self.num_ops = 6
+        hidden_size = config.output_hidden_states
+        dropout_prob = 0.1
+        self.operator_predictor = FFNLayer(hidden_size, hidden_size, operator_classes, dropout_prob)
+        self.ari_predictor = FFNLayer(hidden_size, hidden_size, ari_classes, dropout_prob)
+        self.scale_predictor = FFNLayer(3 * hidden_size, hidden_size, scale_classes, dropout_prob)
+        self.span_tag_predictor = FFNLayer(hidden_size, hidden_size, 2, dropout_prob)
+        self.operand_predictor = FFNLayer(2 * hidden_size, hidden_size, 2, dropout_prob)
+        self.opt_predictor = FFNLayer(2 * hidden_size, hidden_size, 3, dropout_prob)
+        self.order_predictor = FFNLayer(3 * hidden_size, hidden_size, 2, dropout_prob)
+        self.operator_criterion = nn.CrossEntropyLoss()
+        self.scale_criterion = nn.CrossEntropyLoss()
+        self.ari_criterion = nn.CrossEntropyLoss(reduction = "sum")
+        self.opt_criterion = nn.CrossEntropyLoss(reduction = "sum")
+        self.order_criterion = nn.CrossEntropyLoss(reduction = "sum")
+        self.ari_operator_criterion = nn.CrossEntropyLoss()
+        self.NLLLoss = nn.NLLLoss(reduction="sum")
+        self.OPERATOR_CLASSES = OPERATOR_CLASSES_
+        self.ARI_CLASSES = ARITHMETIC_CLASSES_
+
     def get_input_embeddings(self):
         return self.model.embed_tokens
 
