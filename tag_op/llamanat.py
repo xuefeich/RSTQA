@@ -1,4 +1,105 @@
-from transormers.models.llama import LlamaModel,lamaPreTrainedModel
+from transformers import CausalLMOutputWithPast
+from transformers.models.llama import LlamaModel,lamaPreTrainedModel
+import torch
+torch.autograd.set_detect_anomaly(True)
+import torch.nn as nn
+from tatqa_metric import TaTQAEmAndF1
+from .tools.util import FFNLayer
+from .tools import allennlp as util
+from typing import Dict, List, Tuple
+import numpy as np
+from tag_op.data.file_utils import is_scatter_available
+from tag_op.data.data_util import SCALE, OPERATOR_CLASSES_,ARITHMETIC_CLASSES_
+np.set_printoptions(threshold=np.inf)
+# soft dependency
+if is_scatter_available():
+    from torch_scatter import scatter
+    from torch_scatter import scatter_max
+
+def get_continuous_tag_slots(paragraph_token_tag_prediction):
+    tag_slots = []
+    span_start = False
+    for i in range(1, len(paragraph_token_tag_prediction)):
+        if paragraph_token_tag_prediction[i] != 0 and not span_start:
+            span_start = True
+            start_index = i
+        if paragraph_token_tag_prediction[i] == 0 and span_start:
+            span_start = False
+            tag_slots.append((start_index, i))
+    if span_start:
+        tag_slots.append((start_index, len(paragraph_token_tag_prediction)))
+    return tag_slots
+
+
+def get_span_tokens_from_paragraph(paragraph_token_tag_prediction, paragraph_tokens) -> List[str]:
+    span_tokens = []
+    span_start = False
+    for i in range(1, min(len(paragraph_tokens) + 1, len(paragraph_token_tag_prediction))):
+        if paragraph_token_tag_prediction[i] == 0:
+            span_start = False
+        if paragraph_token_tag_prediction[i] != 0:
+            if not span_start:
+                span_tokens.append([paragraph_tokens[i - 1]])
+                span_start = True
+            else:
+                span_tokens[-1] += [paragraph_tokens[i - 1]]
+    span_tokens = [" ".join(tokens) for tokens in span_tokens]
+    return span_tokens
+
+
+def get_span_tokens_from_table(table_cell_tag_prediction, table_cell_tokens) -> List[str]:
+    span_tokens = []
+    for i in range(1, len(table_cell_tag_prediction)):
+        if table_cell_tag_prediction[i] != 0:
+            span_tokens.append(str(table_cell_tokens[i-1]))
+    return span_tokens
+
+
+def get_single_span_tokens_from_paragraph(paragraph_token_tag_prediction,
+                                          paragraph_token_tag_prediction_score,
+                                          paragraph_tokens) -> List[str]:
+    tag_slots = get_continuous_tag_slots(paragraph_token_tag_prediction)
+    best_result = float("-inf")
+    best_combine = []
+    for tag_slot in tag_slots:
+        current_result = np.mean(paragraph_token_tag_prediction_score[tag_slot[0]:tag_slot[1]])
+        if current_result > best_result:
+            best_result = current_result
+            best_combine = tag_slot
+    if not best_combine:
+        return []
+    else:
+        return [" ".join(paragraph_tokens[best_combine[0] - 1: best_combine[1] - 1])]
+
+def get_single_span_tokens_from_table(table_cell_tag_prediction,
+                                      table_cell_tag_prediction_score,
+                                      table_cell_tokens) -> List[str]:
+    tagged_cell_index = [i for i in range(len(table_cell_tag_prediction)) if table_cell_tag_prediction[i] != 0]
+    if not tagged_cell_index:
+        return []
+    tagged_cell_tag_prediction_score = \
+        [table_cell_tag_prediction_score[i] for i in tagged_cell_index]
+    best_result_index = tagged_cell_index[int(np.argmax(tagged_cell_tag_prediction_score))]
+    return [str(table_cell_tokens[best_result_index-1])]
+
+def get_numbers_from_reduce_sequence(sequence_reduce_tag_prediction, sequence_numbers):
+    return [sequence_numbers[i - 1] for i in
+            range(1, min(len(sequence_numbers) + 1, len(sequence_reduce_tag_prediction)))
+            if sequence_reduce_tag_prediction[i] != 0 and np.isnan(sequence_numbers[i - 1]) != True]
+
+
+def get_numbers_from_table(cell_tag_prediction, table_numbers):
+    return [table_numbers[i] for i in range(len(cell_tag_prediction)) if cell_tag_prediction[i] != 0 and \
+            np.isnan(table_numbers[i]) != True]
+
+def get_number_index_from_reduce_sequence(sequence_reduce_tag_prediction, sequence_numbers):
+    indexes = []
+    numbers = []
+    for i in range(1, min(len(sequence_numbers) + 1, len(sequence_reduce_tag_prediction))):
+        if sequence_reduce_tag_prediction[i] != 0 and np.isnan(sequence_numbers[i - 1]) != True:
+            indexes.append(i)
+            numbers.append(sequence_numbers[i - 1])
+    return indexes , numbers
 
 
 class LlamaForTAT(LlamaPreTrainedModel):
@@ -173,7 +274,276 @@ class LlamaForTAT(LlamaPreTrainedModel):
         )
 
 
+def reduce_mean_vector(values, index, name="segmented_reduce_vector_mean"):
+    return _segment_reduce_vector(values, index, "mean", name)
 
+
+def reduce_mean(values, index, name="segmented_reduce_mean"):
+    """
+    Averages a tensor over its segments.
+    Outputs 0 for empty segments.
+    This operations computes the mean over segments, with support for:
+        - Batching using the first dimensions [B1, B2, ..., Bn]. Each element in a batch can have different indices.
+        - Vectorization using the last dimension [V1, V2, ...]. If they are present, the output will be a mean of
+          vectors rather than scalars.
+    Only the middle dimensions [I1, ..., Ik] are reduced by the operation.
+    Args:
+        values (:obj:`torch.Tensor` of shape [B1, B2, ..., Bn, I1, .., Ik, V1, V2, ..]):
+            Tensor containing the values of which the mean must be taken segment-wise.
+        index (:obj:`IndexMap`, indices are of shape [B1, B2, ..., Bn, I1, .., Ik].):
+            Index defining the segments.
+        name (:obj:`str`, `optional`, defaults to 'segmented_reduce_sum'):
+            Name for the operation. Currently not used
+    Returns:
+        output_values (:obj:`torch.Tensor`of shape [B1, B2, ..., Bn, num_segments, V1, V2, ..]): Tensor containing the
+        output values. output_index (:obj:`IndexMap`): IndexMap with shape [B1, B2, ..., Bn, num_segments].
+    """
+    return _segment_reduce(values, index, "mean", name)
+
+
+def reduce_mean_index_vector(values, index, max_length=512, name="index_reduce_mean"):
+    return _index_reduce_vector(values, index, max_length, "mean", name)
+
+
+def reduce_mean_index(values, index, max_length=512, name="index_reduce_mean"):
+    return _index_reduce(values, index, max_length, "mean", name)
+
+
+def reduce_max_index(values, index, max_length=512, name="index_reduce_max"):
+    return _index_reduce_max(values, index, max_length, name)
+
+
+def reduce_max_index_get_vector(values_for_reduce, values_for_reference, index,
+                                max_length=512, name="index_reduce_get_vector"):
+    return _index_reduce_max_get_vector(values_for_reduce, values_for_reference, index, max_length, name)
+
+
+def flatten(index, name="segmented_flatten"):
+    """
+    Flattens a batched index map (which is typically of shape batch_size, seq_length) to a 1d index map. This operation
+    relabels the segments to keep batch elements distinct. The k-th batch element will have indices shifted by
+    `num_segments` * (k - 1). The result is a tensor with `num_segments` multiplied by the number of elements in the
+    batch.
+    Args:
+        index (:obj:`IndexMap`):
+            IndexMap to flatten.
+        name (:obj:`str`, `optional`, defaults to 'segmented_flatten'):
+            Name for the operation. Currently not used
+    Returns:
+        (:obj:`IndexMap`): The flattened IndexMap.
+    """
+    # first, get batch_size as scalar tensor
+    batch_size = torch.prod(torch.tensor(list(index.batch_shape())))
+    # next, create offset as 1-D tensor of length batch_size,
+    # and multiply element-wise by num segments (to offset different elements in the batch) e.g. if batch size is 2: [0, 64]
+    offset = torch.arange(start=0, end=batch_size, device=index.num_segments.device) * index.num_segments
+    offset = offset.view(index.batch_shape())
+    for _ in range(index.batch_dims, len(index.indices.size())):  # typically range(1,2)
+        offset = offset.unsqueeze(-1)
+
+    indices = offset + index.indices
+    return IndexMap(indices=indices.view(-1), num_segments=index.num_segments * batch_size, batch_dims=0)
+
+
+def flatten_index(index, max_length=512, name="index_flatten"):
+    batch_size = index.shape[0]
+    offset = torch.arange(start=0, end=batch_size, device=index.device) * max_length
+    offset = offset.view(batch_size, 1)
+    return (index + offset).view(-1), batch_size * max_length
+
+
+def range_index_map(batch_shape, num_segments, name="range_index_map"):
+    """
+    Constructs an index map equal to range(num_segments).
+    Args:
+        batch_shape (:obj:`torch.Size`):
+            Batch shape
+        num_segments (:obj:`int`):
+            Number of segments
+        name (:obj:`str`, `optional`, defaults to 'range_index_map'):
+            Name for the operation. Currently not used
+    Returns:
+        (:obj:`IndexMap`): IndexMap of shape batch_shape with elements equal to range(num_segments).
+    """
+    batch_shape = torch.as_tensor(
+        batch_shape, dtype=torch.long
+    )  # create a rank 1 tensor vector containing batch_shape (e.g. [2])
+    assert len(batch_shape.size()) == 1
+    num_segments = torch.as_tensor(num_segments)  # create a rank 0 tensor (scalar) containing num_segments (e.g. 64)
+    assert len(num_segments.size()) == 0
+
+    indices = torch.arange(
+        start=0, end=num_segments, device=num_segments.device
+    )  # create a rank 1 vector with num_segments elements
+    new_tensor = torch.cat(
+        [torch.ones_like(batch_shape, dtype=torch.long, device=num_segments.device), num_segments.unsqueeze(dim=0)],
+        dim=0,
+    )
+    # new_tensor is just a vector of [1 64] for example (assuming only 1 batch dimension)
+    new_shape = [int(x) for x in new_tensor.tolist()]
+    indices = indices.view(new_shape)
+
+    multiples = torch.cat([batch_shape, torch.as_tensor([1])], dim=0)
+    indices = indices.repeat(multiples.tolist())
+    # equivalent (in Numpy:)
+    # indices = torch.as_tensor(np.tile(indices.numpy(), multiples.tolist()))
+
+    return IndexMap(indices=indices, num_segments=num_segments, batch_dims=list(batch_shape.size())[0])
+
+
+def _segment_reduce(values, index, segment_reduce_fn, name):
+    """
+    Applies a segment reduction segment-wise.
+    Args:
+        values (:obj:`torch.Tensor`):
+            Tensor with segment values.
+        index (:obj:`IndexMap`):
+            IndexMap.
+        segment_reduce_fn (:obj:`str`):
+            Name for the reduce operation. One of "sum", "mean", "max" or "min".
+        name (:obj:`str`):
+            Name for the operation. Currently not used
+    Returns:
+        (:obj:`IndexMap`): IndexMap of shape batch_shape with elements equal to range(num_segments).
+    """
+    # Flatten the batch dimensions, as segments ops (scatter) do not support batching.
+    # However if `values` has extra dimensions to the right keep them
+    # unflattened. Segmented ops support vector-valued operations.
+    flat_index = flatten(index)
+    vector_shape = values.size()[len(index.indices.size()):]  # torch.Size object
+    flattened_shape = torch.cat(
+        [torch.as_tensor([-1], dtype=torch.long), torch.as_tensor(vector_shape, dtype=torch.long)], dim=0
+    )
+    # changed "view" by "reshape" in the following line
+    flat_values = values.reshape(flattened_shape.tolist())
+
+    segment_means = scatter(
+        src=flat_values,
+        index=flat_index.indices.type(torch.long),
+        dim=0,
+        dim_size=flat_index.num_segments,
+        reduce=segment_reduce_fn,
+    )
+
+    # Unflatten the values.
+    new_shape = torch.cat(
+        [
+            torch.as_tensor(index.batch_shape(), dtype=torch.long),
+            torch.as_tensor([index.num_segments], dtype=torch.long),
+            torch.as_tensor(vector_shape, dtype=torch.long),
+        ],
+        dim=0,
+    )
+
+    output_values = segment_means.view(new_shape.tolist())
+    output_index = range_index_map(index.batch_shape(), index.num_segments)
+    return output_values, output_index
+
+
+def _segment_reduce_vector(values, index, segment_reduce_fn, name):
+    """
+    Applies a segment reduction segment-wise.
+    Args:
+        values (:obj:`torch.Tensor`):
+            Tensor with segment values.
+        index (:obj:`IndexMap`):
+            IndexMap.
+        segment_reduce_fn (:obj:`str`):
+            Name for the reduce operation. One of "sum", "mean", "max" or "min".
+        name (:obj:`str`):
+            Name for the operation. Currently not used
+    Returns:
+        (:obj:`IndexMap`): IndexMap of shape batch_shape with elements equal to range(num_segments).
+    """
+    # Flatten the batch dimensions, as segments ops (scatter) do not support batching.
+    # However if `values` has extra dimensions to the right keep them
+    # unflattened. Segmented ops support vector-valued operations.
+    flat_index = flatten(index)
+    vector_shape = values.size()[len(index.indices.size()):]  # torch.Size object
+    bsz = values.shape[0]
+    seq_len = values.shape[1]
+    hidden_size = values.shape[2]
+    flat_values = values.reshape(bsz * seq_len, hidden_size)
+    segment_means = scatter(
+        src=flat_values,
+        index=flat_index.indices.type(torch.long),
+        dim=0,
+        dim_size=flat_index.num_segments,
+        reduce=segment_reduce_fn,
+    )
+    output_values = segment_means.view(bsz, -1, hidden_size)
+    output_index = range_index_map(index.batch_shape(), index.num_segments)
+    return output_values, output_index
+
+
+def _index_reduce(values, index, max_length, index_reduce_fn, name):
+    flat_index, num_index = flatten_index(index, max_length)
+    bsz = values.shape[0]
+    seq_len = values.shape[1]
+    flat_values = values.reshape(bsz * seq_len)
+    index_means = scatter(
+        src=flat_values,
+        index=flat_index.type(torch.long),
+        dim=0,
+        dim_size=num_index,
+        reduce=index_reduce_fn,
+    )
+    output_values = index_means.view(bsz, -1)
+    return output_values
+
+
+def _index_reduce_max(values, index, max_length, name):
+    flat_index, num_index = flatten_index(index, max_length)
+    bsz = values.shape[0]
+    seq_len = values.shape[1]
+    flat_values = values.reshape(bsz * seq_len)
+    index_max, _ = scatter_max(
+        src=flat_values,
+        index=flat_index.type(torch.long),
+        dim=0,
+        dim_size=num_index,
+    )
+    output_values = index_max.view(bsz, -1)
+    return output_values
+
+
+def _index_reduce_max_get_vector(values_for_reduce, values_for_reference, index, max_length, name):
+    flat_index, num_index = flatten_index(index, max_length)
+    bsz = values_for_reduce.shape[0]
+    seq_len = values_for_reference.shape[1]
+    flat_values_for_reduce = values_for_reduce.reshape(bsz * seq_len)
+    flat_values_for_reference = values_for_reference.reshape(bsz * seq_len, -1)
+    reduce_values, reduce_index = scatter_max(
+        src=flat_values_for_reduce,
+        index=flat_index.type(torch.long),
+        dim=0,
+        dim_size=num_index,
+    )
+    reduce_index[reduce_index == -1] = flat_values_for_reference.shape[0]
+    reduce_values = reduce_values.view(bsz, -1)
+    flat_values_for_reference = torch.cat(
+        (flat_values_for_reference, torch.zeros(1, flat_values_for_reference.shape[1]).to(values_for_reduce.device)),
+        dim=0)
+    flat_values_for_reference = torch.index_select(flat_values_for_reference, dim=0, index=reduce_index)
+    flat_values_for_reference = flat_values_for_reference.view(bsz, reduce_values.shape[1], -1)
+    return reduce_values, flat_values_for_reference
+
+
+def _index_reduce_vector(values, index, max_length, index_reduce_fn, name):
+    flat_index, num_index = flatten_index(index, max_length)
+    bsz = values.shape[0]
+    seq_len = values.shape[1]
+    hidden_size = values.shape[2]
+    flat_values = values.reshape(bsz * seq_len, hidden_size)
+    index_means = scatter(
+        src=flat_values,
+        index=flat_index.type(torch.long),
+        dim=0,
+        dim_size=num_index,
+        reduce=index_reduce_fn,
+    )
+    output_values = index_means.view(bsz, -1, hidden_size)
+    return output_values
 
 
 
