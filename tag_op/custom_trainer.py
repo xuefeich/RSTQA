@@ -4,7 +4,24 @@ class TATTrainer(Trainer):
    def compute_f1(self, model, inputs):
         labels = inputs.pop("labels")
         outputs = model.predict(**inputs)
-        
+
+        ground_truth = outputs["ground_truth"]
+        prediction = outputs["prediction"]
+        pred_scale = outputs["pred_scale"]
+        gold_type, gold_answer, gold_scale = extract_gold_answers(ground_truth)
+        if not gold_answer:
+            loss = 0
+        else:
+            ground_truth_answer_strings = get_answer_str(gold_answer, gold_scale)
+            prediction = prediction if isinstance(prediction, list) else [prediction]
+            prediction_strings = get_answer_str(prediction, pred_scale)
+            prediction_strings = add_percent_pred(prediction_strings, pred_scale, prediction)
+            exact_match, f1_score = metric_max_over_ground_truths(
+                  get_metrics,
+                  prediction_strings,
+                  ground_truth_answer_strings
+            )
+      
         return loss
 
    def prediction_step(
