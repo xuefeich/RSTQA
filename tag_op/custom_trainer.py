@@ -1,5 +1,5 @@
 from transformers import trainer
-
+from RSTQA.tatqa_metric import extract_gold_answers, get_answer_str,add_percent_pred,metric_max_over_ground_truths
 class TATTrainer(Trainer):
    def compute_f1(self, model, inputs):
         labels = inputs.pop("labels")
