@@ -1,5 +1,5 @@
 from transformers import trainer
-from RSTQA.tatqa_metric import extract_gold_answers, get_answer_str,add_percent_pred,metric_max_over_ground_truths
+from RSTQA.tatqa_metric import extract_gold_answers, get_answer_str,add_percent_pred,metric_max_over_ground_truths,get_metrics
 class TATTrainer(Trainer):
    def compute_f1(self, model, inputs):
         labels = inputs.pop("labels")
@@ -16,7 +16,7 @@ class TATTrainer(Trainer):
             prediction = prediction if isinstance(prediction, list) else [prediction]
             prediction_strings = get_answer_str(prediction, pred_scale)
             prediction_strings = add_percent_pred(prediction_strings, pred_scale, prediction)
-            exact_match, f1_score = metric_max_over_ground_truths(
+            exact_match, loss = metric_max_over_ground_truths(
                   get_metrics,
                   prediction_strings,
                   ground_truth_answer_strings
