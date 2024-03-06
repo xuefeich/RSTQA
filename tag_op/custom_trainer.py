@@ -1,5 +1,16 @@
 from transformers import trainer
+from transformers.integrations.deepspeed import deepspeed_init
+from transformers.trainer_utils import EvalLoopOutput, has_length
+from transformers.trainer_pt_utils import find_batch_size
+from .utils import is_torch_npu_available
 from RSTQA.tatqa_metric import extract_gold_answers, get_answer_str,add_percent_pred,metric_max_over_ground_truths,get_metrics
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
+
+
+class F1LoopOutput(NamedTuple):
+    metrics: Optional[Dict[str, float]]
+    num_samples: Optional[int]
+
 class TATTrainer(Trainer):
    def compute_f1(self, model, inputs):
         labels = inputs.pop("labels")
