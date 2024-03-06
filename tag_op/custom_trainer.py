@@ -36,7 +36,7 @@ class TATTrainer(Trainer):
                 f1 = self.compute_f1(model, inputs)
         return loss
 
-   def evaluation_loop(
+   def eval_f1_loop(
         self,
         dataloader: DataLoader,
         description: str,
@@ -149,6 +149,6 @@ class TATTrainer(Trainer):
             if not key.startswith(f"{metric_key_prefix}_"):
                 metrics[f"{metric_key_prefix}_{key}"] = metrics.pop(key)
 
-        return EvalLoopOutput(metrics=metrics, num_samples=num_samples)
+        return F1LoopOutput(metrics=metrics, num_samples=num_samples)
 
 
