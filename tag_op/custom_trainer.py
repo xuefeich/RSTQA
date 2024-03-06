@@ -4,31 +4,31 @@ class TATTrainer(Trainer):
    def compute_f1(self, model, inputs):
         labels = inputs.pop("labels")
         outputs = model.predict(**inputs)
-
-        ground_truth = outputs["ground_truth"]
-        prediction = outputs["prediction"]
-        pred_scale = outputs["pred_scale"]
-        gold_type, gold_answer, gold_scale = extract_gold_answers(ground_truth)
-        if not gold_answer:
-            loss = 0
-        else:
-            ground_truth_answer_strings = get_answer_str(gold_answer, gold_scale)
-            prediction = prediction if isinstance(prediction, list) else [prediction]
-            prediction_strings = get_answer_str(prediction, pred_scale)
-            prediction_strings = add_percent_pred(prediction_strings, pred_scale, prediction)
-            exact_match, loss = metric_max_over_ground_truths(
-                  get_metrics,
-                  prediction_strings,
-                  ground_truth_answer_strings
-            )
+        batch_size = len(labels)
+        f1 = torch.zeros([batch_size])
+        for bsz in range(batch_size):
+            ground_truth = labels[bsz]["ground_truth"]
+            prediction = outputs[bsz]["prediction"]
+            pred_scale = outputs[bsz]["pred_scale"]
+            gold_type, gold_answer, gold_scale = extract_gold_answers(ground_truth)
+            if gold_answer:
+                ground_truth_answer_strings = get_answer_str(gold_answer, gold_scale)
+                prediction = prediction if isinstance(prediction, list) else [prediction]
+                prediction_strings = get_answer_str(prediction, pred_scale)
+                prediction_strings = add_percent_pred(prediction_strings, pred_scale, prediction)
+                exact_match, f1[bsz] = metric_max_over_ground_truths(
+                   get_metrics,
+                   prediction_strings,
+                   ground_truth_answer_strings
+                )
       
-        return loss
+        return f1
 
    def prediction_step(
         self,
         model: nn.Module,
         inputs: Dict[str, Union[torch.Tensor, Any]],
-    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+    ):
         inputs = self._prepare_inputs(inputs)
         with torch.no_grad():
             with self.compute_loss_context_manager():
