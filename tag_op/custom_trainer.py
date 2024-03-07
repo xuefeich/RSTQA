@@ -101,22 +101,7 @@ class TATTrainer(Trainer):
         if args.past_index >= 0:
             self._past = None
 
-        # Initialize containers
-        # losses/preds/labels on GPU/TPU (accumulated for eval_accumulation_steps)
-        losses_host = None
-        preds_host = None
-        labels_host = None
-        inputs_host = None
-
-        # losses/preds/labels on CPU (final containers)
-        all_losses = None
-        all_preds = None
-        all_labels = None
-        all_inputs = None
-        # Will be useful when we have an iterable dataset so don't know its length.
-
         observed_num_examples = 0
-        # Main evaluation loop
 
         all_f1 = 0.0
         for step, inputs in enumerate(dataloader):
@@ -151,7 +136,7 @@ class TATTrainer(Trainer):
             num_samples = observed_num_examples
 
         metrics = {}
-        metrics["f1"] = f1/num_samples
+        metrics["f1"] = all_f1/num_samples
         if hasattr(self, "jit_compilation_time"):
             metrics[f"{metric_key_prefix}_jit_compilation_time"] = self.jit_compilation_time
 
