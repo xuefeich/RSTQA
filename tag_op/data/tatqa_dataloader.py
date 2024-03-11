@@ -5,9 +5,9 @@ import os
 import queue
 import threading
 import warnings
-
+import numpy as np
 from typing import Any, Callable, Iterable, TypeVar, Generic, List, Optional, Union
-
+import random
 import multiprocessing as python_multiprocessing
 import torch
 import torch.distributed as dist
@@ -24,7 +24,7 @@ from torch.utils.data import (
     SequentialSampler,
     RandomSampler,
     BatchSampler,
-    Dataset,)
+    Dataset, )
 
 from torch.utils.data.datapipes.datapipe import _IterDataPipeSerializationWrapper, _MapDataPipeSerializationWrapper
 
@@ -45,7 +45,6 @@ _worker_init_fn_t = Callable[[int], None]
 # type parameter set to a default value if the user doesn't pass in a custom 'collate_fn'.
 # See https://github.com/python/mypy/issues/3737.
 _collate_fn_t = Callable[[List[T]], Any]
-
 
 # These functions used to be defined in this file. However, it was moved to
 # _utils/collate.py. Although it is rather hard to access this from user land
@@ -123,10 +122,10 @@ class DataLoader(Generic[T_co]):
     sampler: Union[Sampler, Iterable]
     pin_memory_device: str
     prefetch_factor: Optional[int]
-    _iterator : Optional['_BaseDataLoaderIter']
+    _iterator: Optional['_BaseDataLoaderIter']
     __initialized = False
 
-    def __init__(self, batch_size: Optional[int] = 1, num_ops = 6,
+    def __init__(self, batch_size: Optional[int] = 1, num_ops=6,
                  shuffle: Optional[bool] = None,
                  num_workers: int = 0, collate_fn: Optional[_collate_fn_t] = None,
                  pin_memory: bool = False, drop_last: bool = False,
@@ -172,8 +171,7 @@ class DataLoader(Generic[T_co]):
 
         torch.set_vital('Dataloader', 'enabled', 'True')  # type: ignore[attr-defined]
 
-
-        dpath =  f"tagop_llama_cached_train.pkl"
+        dpath = f"tagop_llama_cached_train.pkl"
         self.num_ops = num_ops
         with open(dpath, 'rb') as f:
             print("Load data from {}.".format(dpath))
@@ -193,7 +191,7 @@ class DataLoader(Generic[T_co]):
             tag_labels = torch.from_numpy(item["tag_labels"])
             operator_labels = torch.tensor(item["operator_label"])
             scale_labels = torch.tensor(item["scale_label"])
-            #round_labels = torch.tensor(item["round_label"])
+            # round_labels = torch.tensor(item["round_label"])
             gold_answers = item["answer_dict"]
             paragraph_tokens = item["paragraph_tokens"]
             table_cell_tokens = item["table_cell_tokens"]
@@ -209,20 +207,141 @@ class DataLoader(Generic[T_co]):
 
             opd_ids = torch.from_numpy(item["opd_ids"])
             opd_mask = torch.from_numpy(item["opd_mask"])
-            
+
             all_data.append((input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask, paragraph_index,
-                table_cell_index, tag_labels, operator_labels, scale_labels, gold_answers,
-                paragraph_tokens, table_cell_tokens, paragraph_numbers, table_cell_numbers,
-                question_id,ari_ops,opt_labels,ari_labels,opt_mask,order_labels,selected_indexes,question_mask,
-                opd_ids,opd_mask
-                #,round_labels
-                ))
+                             table_cell_index, tag_labels, operator_labels, scale_labels, gold_answers,
+                             paragraph_tokens, table_cell_tokens, paragraph_numbers, table_cell_numbers,
+                             question_id, ari_ops, opt_labels, ari_labels, opt_mask, order_labels, selected_indexes,
+                             question_mask,
+                             opd_ids, opd_mask
+                             # ,round_labels
+                             ))
         print("Load data size {}.".format(len(all_data)))
-        self.data = TaTQABatchGen.make_batches(all_data, args.batch_size if self.is_train else args.eval_batch_size,
-                                              self.is_train)
+        self.data = self.make_batches(all_data, self.batch_size)
         self.offset = 0
         self.all_data = all_data
-    
+
+
+    def make_batches(data, batch_size=32):
+        random.shuffle(data)
+        return [
+                data[i: i + batch_size] if i + batch_size < len(data) else data[i:] + data[
+                                                                                      :i + batch_size - len(data)]
+                for i in range(0, len(data), batch_size)]
+
+    def reset(self):
+        indices = list(range(len(self.data)))
+        random.shuffle(indices)
+        self.data = [self.data[i] for i in indices]
+        for i in range(len(self.data)):
+            random.shuffle(self.data[i])
+        self.offset = 0
+
+
+    def __iter__(self):
+        while self.offset < len(self):
+            batch = self.data[self.offset]
+            self.offset += 1
+
+            input_ids_batch, attention_mask_batch, token_type_ids_batch, paragraph_mask_batch, table_mask_batch, \
+                paragraph_index_batch, table_cell_index_batch, tag_labels_batch, operator_labels_batch, scale_labels_batch, \
+                gold_answers_batch, paragraph_tokens_batch, table_cell_tokens_batch, paragraph_numbers_batch, \
+                table_cell_numbers_batch, question_ids_batch, ari_ops_batch, \
+                opt_labels_batch, ari_labels_batch, opt_mask_batch, order_labels_batch, \
+                selected_indexes_batch, question_mask_batch = zip(*batch)
+
+            bsz = len(batch)
+            input_ids = torch.LongTensor(bsz, 512)
+            attention_mask = torch.LongTensor(bsz, 512)
+            # token_type_ids = torch.LongTensor(bsz, 512).fill_(0)
+            token_type_ids = torch.LongTensor(bsz, 512, 7)
+            paragraph_mask = torch.LongTensor(bsz, 512)
+            table_mask = torch.LongTensor(bsz, 512)
+            question_mask = torch.LongTensor(bsz, 512)
+            paragraph_index = torch.LongTensor(bsz, 512)
+            table_cell_index = torch.LongTensor(bsz, 512)
+            tag_labels = torch.LongTensor(bsz, 512)
+            operator_labels = torch.LongTensor(bsz)
+            scale_labels = torch.LongTensor(bsz)
+
+            ari_labels = torch.LongTensor([])
+            selected_indexes = np.zeros([1, 11])
+
+            opt_mask = torch.LongTensor(bsz)
+            ari_ops = torch.LongTensor(bsz, self.num_ops)
+
+            opt_labels = torch.LongTensor(bsz, self.num_ops - 1, self.num_ops - 1)
+
+            order_labels = torch.LongTensor(bsz, self.num_ops)
+
+            paragraph_tokens = []
+            table_cell_tokens = []
+            gold_answers = []
+            question_ids = []
+            paragraph_numbers = []
+            table_cell_numbers = []
+            for i in range(bsz):
+                input_ids[i] = input_ids_batch[i]
+                attention_mask[i] = attention_mask_batch[i]
+                token_type_ids[i] = token_type_ids_batch[i]
+                paragraph_mask[i] = paragraph_mask_batch[i]
+                table_mask[i] = table_mask_batch[i]
+                paragraph_index[i] = paragraph_index_batch[i]
+
+                opt_mask[i] = opt_mask_batch[i]
+                question_mask[i] = question_mask_batch[i]
+
+                table_cell_index[i] = table_cell_index_batch[i]
+                tag_labels[i] = tag_labels_batch[i]
+                operator_labels[i] = operator_labels_batch[i]
+
+                ari_ops[i] = torch.LongTensor(ari_ops_batch[i])
+                if len(selected_indexes_batch[i]) != 0:
+                    ari_labels = torch.cat((ari_labels, ari_labels_batch[i]), dim=0)
+                    num = selected_indexes_batch[i].shape[0]
+                    sib = np.zeros([num, 11])
+                    for j in range(num):
+                        sib[j, 0] = i
+                        try:
+                            sib[j, 1:] = selected_indexes_batch[i][j]
+                        except:
+                            print(selected_indexes_batch[i][j])
+                            sib[j, 1:] = selected_indexes_batch[i][j][:10]
+                    selected_indexes = np.concatenate((selected_indexes, sib), axis=0)
+
+                order_labels[i] = order_labels_batch[i]
+                opt_labels[i] = opt_labels_batch[i]
+
+                scale_labels[i] = scale_labels_batch[i]
+                paragraph_tokens.append(paragraph_tokens_batch[i])
+                table_cell_tokens.append(table_cell_tokens_batch[i])
+                paragraph_numbers.append(paragraph_numbers_batch[i])
+                table_cell_numbers.append(table_cell_numbers_batch[i])
+                gold_answers.append(gold_answers_batch[i])
+                question_ids.append(question_ids_batch[i])
+
+            out_batch = {"input_ids": input_ids, "attention_mask": attention_mask, "token_type_ids": token_type_ids,
+                         "paragraph_mask": paragraph_mask, "paragraph_index": paragraph_index, "tag_labels": tag_labels,
+                         "operator_labels": operator_labels, "scale_labels": scale_labels,
+                         "paragraph_tokens": paragraph_tokens,
+                         "table_cell_tokens": table_cell_tokens, "paragraph_numbers": paragraph_numbers,
+                         "table_cell_numbers": table_cell_numbers, "gold_answers": gold_answers,
+                         "question_ids": question_ids,
+                         "table_mask": table_mask, "table_cell_index": table_cell_index, "ari_ops": ari_ops,
+                         "ari_labels": ari_labels, "opt_labels": opt_labels, "opt_mask": opt_mask,
+                         "order_labels": order_labels,
+                         "selected_indexes": selected_indexes[1:], "question_mask": question_mask,
+                         }
+            for k in out_batch.keys():
+                if isinstance(out_batch[k], torch.Tensor):
+                    out_batch[k] = out_batch[k].cuda()
+
+            yield out_batch
+
+
+
+
+
     @property
     def multiprocessing_context(self):
         return self.__multiprocessing_context
@@ -281,8 +400,8 @@ class DataLoader(Generic[T_co]):
             suggested_max_worker_msg = ((
                 "Our suggested max number of worker in current system is {}{}, which is smaller "
                 "than what this DataLoader is going to create.").format(
-                    num_worker_suggest,
-                    ("" if cpuset_checked else " (`cpuset` is not taken into account)"))
+                num_worker_suggest,
+                ("" if cpuset_checked else " (`cpuset` is not taken into account)"))
             ) if num_worker_suggest is not None else (
                 "DataLoader is not able to compute a suggested max number of worker in current system.")
 
@@ -290,8 +409,8 @@ class DataLoader(Generic[T_co]):
                 "This DataLoader will create {} worker processes in total. {} "
                 "Please be aware that excessive worker creation might get DataLoader running slow or even freeze, "
                 "lower the worker number to avoid potential slowness/freeze if necessary.").format(
-                    num_worker_created,
-                    suggested_max_worker_msg)
+                num_worker_created,
+                suggested_max_worker_msg)
             return warn_msg
 
         if not self.num_workers or self.num_workers == 0:
@@ -325,6 +444,3 @@ class DataLoader(Generic[T_co]):
                 max_num_worker_suggest,
                 self.num_workers,
                 cpuset_checked))
-
-
-
