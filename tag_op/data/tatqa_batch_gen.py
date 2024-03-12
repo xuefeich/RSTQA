@@ -40,16 +40,11 @@ class TaTQABatchGen(object):
 
             order_labels = item["order_labels"]
             question_mask = torch.from_numpy(item["question_mask"])
-
-            opd_ids = torch.from_numpy(item["opd_ids"])
-            opd_mask = torch.from_numpy(item["opd_mask"])
             
             all_data.append((input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask, paragraph_index,
                 table_cell_index, tag_labels, operator_labels, scale_labels, gold_answers,
                 paragraph_tokens, table_cell_tokens, paragraph_numbers, table_cell_numbers,
-                question_id,ari_ops,opt_labels,ari_labels,opt_mask,order_labels,selected_indexes,question_mask,
-                opd_ids,opd_mask
-                #,round_labels
+                question_id,ari_ops,opt_labels,ari_labels,opt_mask,order_labels,selected_indexes,question_mask
                 ))
         print("Load data size {}.".format(len(all_data)))
         self.data = TaTQABatchGen.make_batches(all_data, args.batch_size if self.is_train else args.eval_batch_size,
@@ -90,13 +85,11 @@ class TaTQABatchGen(object):
             gold_answers_batch, paragraph_tokens_batch, table_cell_tokens_batch, paragraph_numbers_batch,\
             table_cell_numbers_batch, question_ids_batch,  ari_ops_batch ,\
             opt_labels_batch , ari_labels_batch,opt_mask_batch,order_labels_batch , \
-            selected_indexes_batch ,question_mask_batch,opd_ids_batch,opd_mask_batch = zip(*batch)
+            selected_indexes_batch ,question_mask_batch = zip(*batch)
 
             bsz = len(batch)
             input_ids = torch.LongTensor(bsz, 512)
             attention_mask = torch.LongTensor(bsz, 512)
-            opd_ids = torch.LongTensor(bsz, 512)
-            opd_mask = torch.LongTensor(bsz, 512)
             #token_type_ids = torch.LongTensor(bsz, 512).fill_(0)
             token_type_ids = torch.LongTensor(bsz, 512,7)
             paragraph_mask = torch.LongTensor(bsz, 512)
@@ -128,8 +121,6 @@ class TaTQABatchGen(object):
             for i in range(bsz):
                 input_ids[i] = input_ids_batch[i]
                 attention_mask[i] = attention_mask_batch[i]
-                opd_ids[i] = opd_ids_batch[i]
-                opd_mask[i] = opd_mask_batch[i]
                 token_type_ids[i] = token_type_ids_batch[i]
                 paragraph_mask[i] = paragraph_mask_batch[i]
                 table_mask[i] = table_mask_batch[i]
@@ -161,7 +152,6 @@ class TaTQABatchGen(object):
                 opt_labels[i] = opt_labels_batch[i]
 
                 scale_labels[i] = scale_labels_batch[i]
-                #round_labels[i] = round_labels_batch[i]
                 paragraph_tokens.append(paragraph_tokens_batch[i])
                 table_cell_tokens.append(table_cell_tokens_batch[i])
                 paragraph_numbers.append(paragraph_numbers_batch[i])
@@ -176,7 +166,7 @@ class TaTQABatchGen(object):
                 "table_cell_numbers": table_cell_numbers, "gold_answers": gold_answers, "question_ids": question_ids,
                 "table_mask": table_mask, "table_cell_index":table_cell_index, "ari_ops":ari_ops,
                 "ari_labels":ari_labels,"opt_labels":opt_labels,"opt_mask":opt_mask,"order_labels":order_labels,
-                "selected_indexes" : selected_indexes[1:],"question_mask":question_mask,"opd_ids":opd_ids,"opd_mask":opd_mask
+                "selected_indexes" : selected_indexes[1:],"question_mask":question_mask
                 #,"round_labels" : round_labels
             }
 
