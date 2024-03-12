@@ -1,24 +1,27 @@
+'''
+vi /home/alan/.conda/envs/alan/lib/python3.10/site-packages/torch/utils/data/dataloader.py
+633行改成  data = self._next_data() 并删除index
+
+vi /home/alan/.conda/envs/alan/lib/python3.10/site-packages/torch/utils/data/_utils/worker.py
+308行改成 data=index
+
+'''
+
+
+
 import os
 import pickle
 import torch
 import random
 import numpy as np
-from torch.utils.data import Dataset,BatchSampler
-
-
+from torch.utils.data import Dataset,BatchSampler,dataloader,RandomSampler
 class CustomBatchSampler(BatchSampler):
+    self.num_ops = 6
     def __iter__(self):
         batch = []
         for idx in self.sampler:
-            batch.append(idx)
+            batch.append(self.sampler.data_source[idx])
             if len(batch) == self.batch_size:
-                input_ids_batch, attention_mask_batch, token_type_ids_batch, paragraph_mask_batch, table_mask_batch, \
-                    paragraph_index_batch, table_cell_index_batch, tag_labels_batch, operator_labels_batch, scale_labels_batch, \
-                    gold_answers_batch, paragraph_tokens_batch, table_cell_tokens_batch, paragraph_numbers_batch, \
-                    table_cell_numbers_batch, question_ids_batch, ari_ops_batch, \
-                    opt_labels_batch, ari_labels_batch, opt_mask_batch, order_labels_batch, \
-                    selected_indexes_batch, question_mask_batch = zip(*batch)
-
                 bsz = self.batch_size
                 input_ids = torch.LongTensor(bsz, 512)
                 attention_mask = torch.LongTensor(bsz, 512)
@@ -37,7 +40,6 @@ class CustomBatchSampler(BatchSampler):
                 ari_ops = torch.LongTensor(bsz, self.num_ops)
                 opt_labels = torch.LongTensor(bsz, self.num_ops - 1, self.num_ops - 1)
                 order_labels = torch.LongTensor(bsz, self.num_ops)
-
                 paragraph_tokens = []
                 table_cell_tokens = []
                 gold_answers = []
@@ -45,39 +47,39 @@ class CustomBatchSampler(BatchSampler):
                 paragraph_numbers = []
                 table_cell_numbers = []
                 for i in range(bsz):
-                    input_ids[i] = input_ids_batch[i]
-                    attention_mask[i] = attention_mask_batch[i]
-                    token_type_ids[i] = token_type_ids_batch[i]
-                    paragraph_mask[i] = paragraph_mask_batch[i]
-                    table_mask[i] = table_mask_batch[i]
-                    paragraph_index[i] = paragraph_index_batch[i]
-                    opt_mask[i] = opt_mask_batch[i]
-                    question_mask[i] = question_mask_batch[i]
-                    table_cell_index[i] = table_cell_index_batch[i]
-                    tag_labels[i] = tag_labels_batch[i]
-                    operator_labels[i] = operator_labels_batch[i]
-                    ari_ops[i] = torch.LongTensor(ari_ops_batch[i])
-                    if len(selected_indexes_batch[i]) != 0:
-                        ari_labels = torch.cat((ari_labels, ari_labels_batch[i]), dim=0)
-                        num = selected_indexes_batch[i].shape[0]
+                    input_ids[i] = batch[i][0]
+                    attention_mask[i] = batch[i][1]
+                    token_type_ids[i] = batch[i][2]
+                    paragraph_mask[i] = batch[i][3]
+                    table_mask[i] = batch[i][4]
+                    paragraph_index[i] = batch[i][5]
+                    opt_mask[i] = batch[i][19]
+                    question_mask[i] = batch[i][22]
+                    table_cell_index[i] = batch[i][6]
+                    tag_labels[i] = batch[i][7]
+                    operator_labels[i] = batch[i][8]
+                    ari_ops[i] = torch.LongTensor(batch[i][16])
+                    if len(batch[i][21]) != 0:
+                        ari_labels = torch.cat((ari_labels, batch[i][18]), dim=0)
+                        num = batch[i][21].shape[0]
                         sib = np.zeros([num, 11])
                         for j in range(num):
                             sib[j, 0] = i
                             try:
-                                sib[j, 1:] = selected_indexes_batch[i][j]
+                                sib[j, 1:] = batch[i][21][j]
                             except:
-                                print(selected_indexes_batch[i][j])
-                                sib[j, 1:] = selected_indexes_batch[i][j][:10]
+                                print(batch[i][21][j])
+                                sib[j, 1:] = batch[i][21][j][:10]
                         selected_indexes = np.concatenate((selected_indexes, sib), axis=0)
-                    order_labels[i] = order_labels_batch[i]
-                    opt_labels[i] = opt_labels_batch[i]
-                    scale_labels[i] = scale_labels_batch[i]
-                    paragraph_tokens.append(paragraph_tokens_batch[i])
-                    table_cell_tokens.append(table_cell_tokens_batch[i])
-                    paragraph_numbers.append(paragraph_numbers_batch[i])
-                    table_cell_numbers.append(table_cell_numbers_batch[i])
-                    gold_answers.append(gold_answers_batch[i])
-                    question_ids.append(question_ids_batch[i])
+                    order_labels[i] = batch[i][20]
+                    opt_labels[i] = batch[i][17]
+                    scale_labels[i] = batch[i][9]
+                    paragraph_tokens.append(batch[i][11])
+                    table_cell_tokens.append(batch[i][12])
+                    paragraph_numbers.append(batch[i][13])
+                    table_cell_numbers.append(batch[i][14])
+                    gold_answers.append(batch[i][10])
+                    question_ids.append(batch[i][15])
                 out_batch = {"input_ids": input_ids, "attention_mask": attention_mask, "token_type_ids": token_type_ids,
                              "paragraph_mask": paragraph_mask, "paragraph_index": paragraph_index,
                              "tag_labels": tag_labels,
@@ -94,13 +96,7 @@ class CustomBatchSampler(BatchSampler):
                 yield out_batch
                 batch = []
         if len(batch) > 0:
-            input_ids_batch, attention_mask_batch, token_type_ids_batch, paragraph_mask_batch, table_mask_batch, \
-                paragraph_index_batch, table_cell_index_batch, tag_labels_batch, operator_labels_batch, scale_labels_batch, \
-                gold_answers_batch, paragraph_tokens_batch, table_cell_tokens_batch, paragraph_numbers_batch, \
-                table_cell_numbers_batch, question_ids_batch, ari_ops_batch, \
-                opt_labels_batch, ari_labels_batch, opt_mask_batch, order_labels_batch, \
-                selected_indexes_batch, question_mask_batch= zip(*batch)
-            bsz = len(batch)
+            bsz = self.batch_size
             input_ids = torch.LongTensor(bsz, 512)
             attention_mask = torch.LongTensor(bsz, 512)
             token_type_ids = torch.LongTensor(bsz, 512).fill_(0)
@@ -112,17 +108,12 @@ class CustomBatchSampler(BatchSampler):
             tag_labels = torch.LongTensor(bsz, 512)
             operator_labels = torch.LongTensor(bsz)
             scale_labels = torch.LongTensor(bsz)
-
             ari_labels = torch.LongTensor([])
             selected_indexes = np.zeros([1, 11])
-
             opt_mask = torch.LongTensor(bsz)
             ari_ops = torch.LongTensor(bsz, self.num_ops)
-
             opt_labels = torch.LongTensor(bsz, self.num_ops - 1, self.num_ops - 1)
-
             order_labels = torch.LongTensor(bsz, self.num_ops)
-
             paragraph_tokens = []
             table_cell_tokens = []
             gold_answers = []
@@ -130,42 +121,39 @@ class CustomBatchSampler(BatchSampler):
             paragraph_numbers = []
             table_cell_numbers = []
             for i in range(bsz):
-                input_ids[i] = input_ids_batch[i]
-                attention_mask[i] = attention_mask_batch[i]
-                token_type_ids[i] = token_type_ids_batch[i]
-                paragraph_mask[i] = paragraph_mask_batch[i]
-                table_mask[i] = table_mask_batch[i]
-                paragraph_index[i] = paragraph_index_batch[i]
-                opt_mask[i] = opt_mask_batch[i]
-                question_mask[i] = question_mask_batch[i]
-
-                table_cell_index[i] = table_cell_index_batch[i]
-                tag_labels[i] = tag_labels_batch[i]
-                operator_labels[i] = operator_labels_batch[i]
-
-                ari_ops[i] = torch.LongTensor(ari_ops_batch[i])
-                if len(selected_indexes_batch[i]) != 0:
-                    ari_labels = torch.cat((ari_labels, ari_labels_batch[i]), dim=0)
-                    num = selected_indexes_batch[i].shape[0]
+                input_ids[i] = batch[i][0]
+                attention_mask[i] = batch[i][1]
+                token_type_ids[i] = batch[i][2]
+                paragraph_mask[i] = batch[i][3]
+                table_mask[i] = batch[i][4]
+                paragraph_index[i] = batch[i][5]
+                opt_mask[i] = batch[i][19]
+                question_mask[i] = batch[i][22]
+                table_cell_index[i] = batch[i][6]
+                tag_labels[i] = batch[i][7]
+                operator_labels[i] = batch[i][8]
+                ari_ops[i] = torch.LongTensor(batch[i][16])
+                if len(batch[i][21]) != 0:
+                    ari_labels = torch.cat((ari_labels, batch[i][18]), dim=0)
+                    num = batch[i][21].shape[0]
                     sib = np.zeros([num, 11])
                     for j in range(num):
                         sib[j, 0] = i
                         try:
-                            sib[j, 1:] = selected_indexes_batch[i][j]
+                            sib[j, 1:] = batch[i][21][j]
                         except:
-                            print(selected_indexes_batch[i][j])
-                            sib[j, 1:] = selected_indexes_batch[i][j][:10]
+                            print(batch[i][21][j])
+                            sib[j, 1:] = batch[i][21][j][:10]
                     selected_indexes = np.concatenate((selected_indexes, sib), axis=0)
-
-                order_labels[i] = order_labels_batch[i]
-                opt_labels[i] = opt_labels_batch[i]
-                scale_labels[i] = scale_labels_batch[i]
-                paragraph_tokens.append(paragraph_tokens_batch[i])
-                table_cell_tokens.append(table_cell_tokens_batch[i])
-                paragraph_numbers.append(paragraph_numbers_batch[i])
-                table_cell_numbers.append(table_cell_numbers_batch[i])
-                gold_answers.append(gold_answers_batch[i])
-                question_ids.append(question_ids_batch[i])
+                order_labels[i] = batch[i][20]
+                opt_labels[i] = batch[i][17]
+                scale_labels[i] = batch[i][9]
+                paragraph_tokens.append(batch[i][11])
+                table_cell_tokens.append(batch[i][12])
+                paragraph_numbers.append(batch[i][13])
+                table_cell_numbers.append(batch[i][14])
+                gold_answers.append(batch[i][10])
+                question_ids.append(batch[i][15])
 
             out_batch = {"input_ids": input_ids, "attention_mask": attention_mask, "token_type_ids": token_type_ids,
                          "paragraph_mask": paragraph_mask, "paragraph_index": paragraph_index, "tag_labels": tag_labels,
@@ -181,7 +169,7 @@ class CustomBatchSampler(BatchSampler):
                          }
             yield out_batch
 
-class custom_data(Dataset.Dataset):
+class custom_data(Dataset):
     def __init__(self, dpath):
         with open(dpath, 'rb') as f:
             print("Load data from {}.".format(dpath))
@@ -225,3 +213,16 @@ class custom_data(Dataset.Dataset):
 
     def __len__(self):
         return len(self.data)
+
+if __name__ == '__main__':
+    dataset = custom_data('tag_op/cache/tagop_roberta_cached_train.pkl')
+    sampl = CustomBatchSampler(RandomSampler(dataset),batch_size=8, drop_last=False)
+    loader =  dataloader.DataLoader(
+                dataset=dataset,
+                batch_sampler=sampl,
+                num_workers = 2,
+                prefetch_factors = 2,
+            )
+
+    for batch in loader:
+        print(batch)
