@@ -702,7 +702,7 @@ class TagTaTQAReader(object):
                        paragraph_number_value, table_cell_number_value, paragraph_index, table_cell_index,
                         tags_ground_truth, operator_ground_truth, scale_ground_truth,paragraph_tokens, 
                         table_cell_tokens, answer_dict, question_id, ari_ops,opt_mask,opt_index,opt_labels,
-                       ari_labels,order_labels,question_mask,opd_ids,opd_mask):
+                       ari_labels,order_labels,question_mask):
 
         if ari_ops != None:
             ari_ops_padding = self.num_ops - len(ari_ops)
@@ -814,8 +814,6 @@ class TagTaTQAReader(object):
         return {
             "input_ids": np.array(input_ids),
             "attention_mask": np.array(attention_mask),
-            "opd_ids":np.array(opd_ids),
-            "opd_mask":np.array(opd_mask),
             "token_type_ids": np.array(token_type_ids),
             "paragraph_mask": np.array(paragraph_mask),
             "table_mask": np.array(table_mask),
@@ -863,16 +861,10 @@ class TagTaTQAReader(object):
         '''
 
         order_labels = np.zeros(self.num_ops)
-        opdtext = answer
                          
         if answer_type == "arithmetic":
             operator_class = self.OPERATOR_CLASSES["ARITHMETIC"]
-            num_facts = facts_to_nums(facts)
-
-            if len(num_facts) > 0:
-                nftexts = [str(nf) for nf in num_facts]
-                opdtext = ','.join(nftexts)
-            
+            num_facts = facts_to_nums(facts)         
             isavg = 0
             try:
                if _is_average(num_facts,answer):
@@ -896,9 +888,6 @@ class TagTaTQAReader(object):
                    ari_ops = [self.ari_ops[i[0]] for i in ari_operations]
                    operands = [i[1:] for i in ari_operations]
                    ari_tags = {'table':[],'para':[],'operation':[]}
-
-                   nftexts = [[str(opd) for opd in opds if isinstance(opd,str) == False] for opds in operands]
-                   opdtext = ','.join([','.join(opds) for opds in nftexts])
                    for i,opds in enumerate(operands): 
                        temp_mapping,operand_one_mapping,operand_two_mapping = split_mapping(opds,answer_mapping,table,paragraphs)
                        if temp_mapping == None:
@@ -1000,17 +989,17 @@ class TagTaTQAReader(object):
                     self.passage_length_limit, self.max_pieces,self.num_ops,ari_tags)
 
 
-        opd_ids = torch.zeros([1, self.max_pieces])
-        opdtext =  ' '.join([str(i) for i in tags[0]])
-        opd_list = question_tokenizer(opdtext, self.tokenizer)
-        opdpad = self.max_pieces - len(opd_list)
-        if opdpad > 0:
-            opd_list +=[0] *opdpad
-        else:
-            opd_list = opd_list[:self.max_pieces]
-        opd_ids[0] = torch.from_numpy(np.array(opd_list))
-        opd_mask = torch.zeros([1, self.max_pieces])
-        opd_mask[0,ql :qtpl] = 1
+        # opd_ids = torch.zeros([1, self.max_pieces])
+        # opdtext =  ' '.join([str(i) for i in tags[0]])
+        # opd_list = question_tokenizer(opdtext, self.tokenizer)
+        # opdpad = self.max_pieces - len(opd_list)
+        # if opdpad > 0:
+        #     opd_list +=[0] *opdpad
+        # else:
+        #     opd_list = opd_list[:self.max_pieces]
+        # opd_ids[0] = torch.from_numpy(np.array(opd_list))
+        # opd_mask = torch.zeros([1, self.max_pieces])
+        # opd_mask[0,ql :qtpl] = 1
         
         opt_labels = torch.zeros(1,self.num_ops - 1 , self.num_ops-1)
         #whole_tags = combine_tags(ari_round_tags,opd_two_tags)
@@ -1038,7 +1027,7 @@ class TagTaTQAReader(object):
         return self._make_instance(input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask,
                     paragraph_number_value, table_cell_number_value, paragraph_index, table_index, tags, operator_class, scale_class,
                     paragraph_tokens, table_cell_tokens, answer_dict, question_id,ari_ops,opt_mask,opt_index,opt_labels,
-                    ari_round_labels,order_labels,question_mask,opd_ids,opd_mask)
+                    ari_round_labels,order_labels,question_mask)
 
 
     def _read(self, file_path: str):
@@ -1046,7 +1035,7 @@ class TagTaTQAReader(object):
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
             dataset_file.close()
-        f = open("3round.json",'w')
+        # f = open("3round.json",'w')
         instances = []
         key_error_count = 0
         index_error_count = 0
@@ -1093,12 +1082,12 @@ class TagTaTQAReader(object):
                         #print(instance["ari_tags"])
                     #count += 1
                     instances.append(instance)
-                    a_ops = instance["ari_ops"]
-                    if 0 not in a_ops and -100 not in a_ops:
-                        f.write(json.dumps({"table":table,"ques":question,"derivation":derivation,"mapping":answer_mapping}) + '\n')
+                    # a_ops = instance["ari_ops"]
+                    # if 0 not in a_ops and -100 not in a_ops:
+                    #     f.write(json.dumps({"table":table,"ques":question,"derivation":derivation,"mapping":answer_mapping}) + '\n')
                 #else:
                 #    f.write(json.dumps({"table":table,"ques":question,"derivation":derivation,"mapping":answer_mapping}) + '\n')
-        f.close()
+        # f.close()
         return instances
 
 class TagTaTQATestReader(object):
