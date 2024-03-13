@@ -104,9 +104,9 @@ def get_number_index_from_reduce_sequence(sequence_reduce_tag_prediction, sequen
 
 class LlamaForTAT(LlamaPreTrainedModel):
     _tied_weights_keys = ["lm_head.weight"]
-    def __init__(self, config):
+    def __init__(self, model, config):
         super().__init__(config)
-        self.model = LlamaModel(config)
+        self.model = model
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
