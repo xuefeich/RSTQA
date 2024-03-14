@@ -118,6 +118,7 @@ class LlamaForTAT(LlamaPreTrainedModel):
         self.scale_classes = len(SCALE)
         self.num_ops = 6
         hidden_size = config.output_hidden_states
+        self.hidden_size = hidden_size
         dropout_prob = 0.1
         self.operator_predictor = FFNLayer(hidden_size, hidden_size, operator_classes, dropout_prob)
         self.ari_predictor = FFNLayer(hidden_size, hidden_size, ari_classes, dropout_prob)
@@ -161,14 +162,25 @@ class LlamaForTAT(LlamaPreTrainedModel):
         input_ids: torch.LongTensor = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
+        token_type_ids: torch.LongTensor,
+        paragraph_mask: torch.LongTensor,
+        paragraph_index: torch.LongTensor,
+        opt_mask : torch.LongTensor,
+        tag_labels: torch.LongTensor,
+        operator_labels: torch.LongTensor,
+        ari_ops:torch.LongTensor,
+        ari_labels : torch.LongTensor,
+        order_labels : torch.LongTensor,
+        opt_labels : torch.LongTensor,
+        scale_labels: torch.LongTensor,
+        selected_indexes : np.array,
+        gold_answers: str,
+        paragraph_tokens: List[List[str]],
+        paragraph_numbers: List[np.ndarray],
+        table_cell_numbers: List[np.ndarray],
+        question_ids: List[str], 
         past_key_values: Optional[List[torch.FloatTensor]] = None,
-        inputs_embeds: Optional[torch.FloatTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
-        use_cache: Optional[bool] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        cache_position: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.LongTensor] = None,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         r"""
         Args:
@@ -183,17 +195,16 @@ class LlamaForTAT(LlamaPreTrainedModel):
         )
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+        batch_size = input_ids.shape[0]
+        device = input_ids.device
+        inputs_embeds = torch.LongTensor([batch_size,1,self.hidden_size])
+        input_embeds[:,0,:] = token_type_ids
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_values=past_key_values,
             inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            cache_position=cache_position,
         )
 
         sequence_output = outputs[0]
@@ -288,14 +299,392 @@ class LlamaForTAT(LlamaPreTrainedModel):
                     loss = loss + self.opt_criterion(
                             self.opt_predictor(torch.cat((opt_output[:, j, :], opt_output[:, i, :]), dim=-1)),opt_labels[:, j, i - 1])
 
-        return CausalLMOutputWithPast(
-            loss=loss,
-            logits=logits,
-            past_key_values=outputs.past_key_values,
-            hidden_states=outputs.hidden_states,
-            attentions=outputs.attentions,
+        return {"loss":loss}
+
+
+
+    def predict(self,
+                input_ids,
+                attention_mask,
+                token_type_ids,
+                paragraph_mask,
+                paragraph_index,
+                tag_labels,
+                gold_answers,
+                paragraph_tokens,
+                paragraph_numbers,
+                table_cell_numbers,
+                question_ids,
+                opt_mask,
+                position_ids=None,
+                mode=None,
+                epoch=None,
+                table_mask=None,
+                question_mask = None,
+                table_cell_index=None,
+                table_cell_tokens=None,
+                past_key_values: Optional[List[torch.LongTensor]] = None,
+                inputs_embeds: Optional[torch.LongTensor] = None,
+                
+                ):
+        batch_size = input_ids.shape[0]
+        device = input_ids.device
+        inputs_embeds = torch.LongTensor([batch_size,1,self.hidden_size])
+        input_embeds[:,0,:] = token_type_ids
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
         )
 
+        
+        sequence_output = outputs[0]
+
+
+        if self.config.pretraining_tp > 1:
+            lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
+            logits = [F.linear(sequence_output, lm_head_slices[i]) for i in range(self.config.pretraining_tp)]
+            logits = torch.cat(logits, dim=-1)
+        else:
+            logits = self.lm_head(sequence_output)
+        logits = logits.float()
+
+                    
+        cls_output = sequence_output[:, 0, :]
+        question_output = util.replace_masked_values(sequence_output, question_mask.unsqueeze(-1), 0)
+        question_reduce_mean = torch.mean(question_output, dim=1)
+
+        table_sequence_output = util.replace_masked_values(sequence_output, table_mask.unsqueeze(-1), 0)
+        table_tag_prediction = self.span_tag_predictor(table_sequence_output)
+        table_tag_prediction = util.masked_log_softmax(table_tag_prediction, mask=None)
+        table_tag_prediction = util.replace_masked_values(table_tag_prediction, table_mask.unsqueeze(-1), 0)
+        table_tag_labels = util.replace_masked_values(tag_labels.float(), table_mask, 0)
+
+        paragraph_sequence_output = util.replace_masked_values(sequence_output, paragraph_mask.unsqueeze(-1), 0)
+        paragraph_tag_prediction = self.span_tag_predictor(paragraph_sequence_output)
+        paragraph_tag_prediction = util.masked_log_softmax(paragraph_tag_prediction, mask=None)
+        paragraph_tag_prediction = util.replace_masked_values(paragraph_tag_prediction, paragraph_mask.unsqueeze(-1), 0)
+        paragraph_tag_labels = util.replace_masked_values(tag_labels.float(), paragraph_mask, 0)
+
+        paragraph_reduce_mean = torch.mean(paragraph_sequence_output, dim=1)
+        table_reduce_mean = torch.mean(table_sequence_output, dim=1)
+
+        scale_output = torch.cat((question_reduce_mean, table_reduce_mean, paragraph_reduce_mean), dim=-1)
+        operator_prediction = self.operator_predictor(cls_output)
+
+        scale_prediction = self.scale_predictor(scale_output)
+        predicted_operator_class = torch.argmax(operator_prediction, dim=-1)
+
+        opt_output = torch.zeros([batch_size,self.num_ops,self.hidden_size],device = device)
+
+        for bsz in range(batch_size):
+            opt_output[bsz] = sequence_output[bsz,opt_mask[bsz]:opt_mask[bsz]+self.num_ops,:]
+        
+        ari_ops_prediction = self.ari_predictor(opt_output)
+        pred_ari_class = torch.argmax(ari_ops_prediction,dim = -1)
+        paragraph_tag_prediction_score = paragraph_tag_prediction[:, :, 1]
+        paragraph_token_tag_prediction_score = reduce_max_index(paragraph_tag_prediction_score, paragraph_index).detach().cpu().numpy()
+        paragraph_tag_prediction_argmax = torch.argmax(paragraph_tag_prediction, dim=-1).float()
+        paragraph_token_tag_prediction = reduce_mean_index(paragraph_tag_prediction_argmax, paragraph_index).detach().cpu().numpy()
+        table_tag_prediction_score = table_tag_prediction[:, :, 1]
+        table_cell_tag_prediction_score = reduce_max_index(table_tag_prediction_score, table_cell_index).detach().cpu().numpy()
+        table_tag_prediction_argmax = torch.argmax(table_tag_prediction, dim=-1).float()
+        table_cell_tag_prediction = reduce_mean_index(table_tag_prediction_argmax, table_cell_index).detach().cpu().numpy()
+        selected_numbers_output = torch.zeros([200 , self.num_ops, 2*self.hidden_size],device = device)
+        number_indexes_batch = np.zeros([200 , 2])
+        selected_numbers_batch = []
+        num_numbers = 0
+        pred_ari_class = pred_ari_class.detach().cpu().numpy()
+        predicted_scale_class = torch.argmax(scale_prediction, dim=-1).detach().cpu().numpy()
+        output_dict = {}
+        output_dict["question_id"] = []
+        output_dict["answer"] = []
+        output_dict["scale"] = []
+        output_dict["gold_answers"] = []
+        output_dict["pred_span"] = []
+        output_dict["gold_span"] = []
+
+        operand_prediction = torch.zeros([80,self.num_ops,2],device = device)
+        scores = torch.zeros([batch_size,self.num_ops,2],device = device)
+        top_scores = torch.zeros([batch_size,self.num_ops],device = device)
+
+        top_indexes = np.zeros([batch_size,self.num_ops])
+        top_numbers = np.zeros([batch_size,self.num_ops])
+        top_2_indexes = np.zeros([batch_size,self.num_ops,2])
+        first_numbers = np.zeros([batch_size,self.num_ops])
+        first_numbers[:,:] = np.nan
+        sec_numbers = np.zeros([batch_size,self.num_ops])
+        sec_numbers[:,:] = np.nan
+        pred_order = torch.zeros([batch_size,self.num_ops],device = device)
+
+        for bsz in range(batch_size):
+            para_sel_indexes , paragraph_selected_numbers = get_number_index_from_reduce_sequence(paragraph_token_tag_prediction[bsz],paragraph_numbers[bsz])
+            table_sel_indexes , table_selected_numbers = get_number_index_from_reduce_sequence(table_cell_tag_prediction[bsz], table_cell_numbers[bsz])
+            selected_numbers = paragraph_selected_numbers + table_selected_numbers
+            selected_indexes = para_sel_indexes + table_sel_indexes
+
+            if not selected_numbers:
+                selected_numbers_batch.append([])
+            else:
+                pn = len(para_sel_indexes)
+                tn = len(table_sel_indexes)
+                k = 0
+                selected_numbers_batch.append(selected_numbers)
+                for sel_index in selected_indexes:
+                    if k < pn:
+                        selected_index = torch.nonzero(paragraph_index[bsz] == sel_index).squeeze(-1)
+                    else:
+                        selected_index = torch.nonzero(table_cell_index[bsz] == sel_index).squeeze(-1)
+
+                    selected_index_mean = np.mean(selected_index.float().detach().cpu().numpy())
+                    selected_indexes[k] = selected_index_mean
+                    k += 1
+
+                    number_indexes_batch[num_numbers,0] = bsz
+                    number_indexes_batch[num_numbers,1] = selected_index_mean
+                    for roud in range(self.num_ops):
+                        operand_prediction[num_numbers,roud] = self.operand_predictor(torch.cat((torch.mean(sequence_output[bsz , selected_index],dim = 0).squeeze(0), opt_output[bsz,roud]),dim = -1))
+                        cur_score = operand_prediction[num_numbers,roud,1]
+                        if cur_score > top_scores[bsz,roud]:
+                            top_scores[bsz,roud] = cur_score
+                            top_indexes[bsz,roud] = selected_index_mean
+                        if scores[bsz,roud,0] >= scores[bsz,roud,1]:
+                            if cur_score > scores[bsz,roud,0]:
+                                scores[bsz,roud,1] = cur_score
+                                top_2_indexes[bsz,roud,1] = selected_index_mean
+                            elif cur_score > scores[bsz,roud,1]:
+                                scores[bsz,roud,1] = cur_score
+                                top_2_indexes[bsz,roud,1] = selected_index_mean
+                        else:
+                            if cur_score > scores[bsz,roud,1]:
+                                scores[bsz,roud,0] = cur_score
+                                top_2_indexes[bsz,roud,0] = selected_index_mean
+                            elif cur_score > scores[bsz,roud,0]:
+                                scores[bsz,roud,0] = cur_score
+                                top_2_indexes[bsz,roud,0] = selected_index_mean
+                    num_numbers += 1
+                for roud in range(self.num_ops):
+                    if top_indexes[bsz,roud] != 0:
+                        top_numbers[bsz,roud] = selected_numbers[selected_indexes.index(top_indexes[bsz,roud])]
+                    if top_2_indexes[bsz,roud,0] != 0 and top_2_indexes[bsz,roud,1] != 0:
+                        first_index = min(top_2_indexes[bsz,roud])
+                        first_numbers[bsz,roud] = selected_numbers[selected_indexes.index(first_index)]
+                        sec_index = max(top_2_indexes[bsz,roud])
+                        sec_numbers[bsz,roud] = selected_numbers[selected_indexes.index(sec_index)]
+                        pred_order[bsz,roud] = torch.argmax(self.order_predictor(torch.cat((sequence_output[bsz , int(first_index)], opt_output[bsz,roud] , sequence_output[bsz , int(sec_index)]),dim=-1)),dim = -1)
+
+
+
+        if num_numbers > 0:
+            number_indexes_batch = number_indexes_batch[:num_numbers]
+            pred_ari_tags_class = torch.argmax(operand_prediction[:num_numbers],dim = -1).detach().cpu().numpy()
+            pred_order = pred_order.detach().cpu().numpy()
+            pred_opt_class = torch.zeros([batch_size,self.num_ops - 1 , self.num_ops - 1],device = device)
+            pred_opd1_opt_scores = torch.zeros([batch_size,self.num_ops - 1 , self.num_ops - 1],device = device)
+            pred_opd2_opt_scores = torch.zeros([batch_size,self.num_ops - 1 , self.num_ops - 1],device = device)
+            for i in range(1,self.num_ops):
+                for j in range(i):
+                    ari_opt_prediction = self.opt_predictor(torch.cat((opt_output[:,j,:],opt_output[:,i,:]),dim = -1))
+                    pred_opd1_opt_scores[:,j,i-1] = ari_opt_prediction[:,1]
+                    pred_opd2_opt_scores[:,j,i-1] = ari_opt_prediction[:,2]
+                    pred_opt_class[:,j,i-1] = torch.argmax(ari_opt_prediction,dim = -1)
+            pred_opt_class = pred_opt_class.detach().cpu().numpy()
+            pred_opd1_opt_scores = pred_opd1_opt_scores.detach().cpu().numpy()
+            pred_opd2_opt_scores = pred_opd2_opt_scores.detach().cpu().numpy()
+
+        for bsz in range(batch_size):
+            pred_span = []
+            selected_numbers_labels = []
+            current_ops = ["ignore"]* self.num_ops
+            selected_numbers = []
+            pred_operands = {}
+            
+            if "SPAN-TEXT" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["SPAN-TEXT"]:
+                paragraph_selected_span_tokens = get_single_span_tokens_from_paragraph(
+                      paragraph_token_tag_prediction[bsz],
+                      paragraph_token_tag_prediction_score[bsz],
+                      paragraph_tokens[bsz]
+                   )
+                answer = paragraph_selected_span_tokens
+                answer = sorted(answer)
+                output_dict["pred_span"].append(answer)
+                pred_span += answer
+                current_ops[0] = "Span-in-text"
+            elif "SPAN-TABLE" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["SPAN-TABLE"]:
+                table_selected_tokens = get_single_span_tokens_from_table(
+                   table_cell_tag_prediction[bsz],
+                   table_cell_tag_prediction_score[bsz],
+                   table_cell_tokens[bsz])
+                answer = table_selected_tokens
+                answer = sorted(answer)
+                output_dict["pred_span"].append(answer)
+                pred_span += answer
+                current_ops[0] = "Cell-in-table"
+            elif "MULTI_SPAN" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["MULTI_SPAN"]:
+                paragraph_selected_span_tokens = get_span_tokens_from_paragraph(paragraph_token_tag_prediction[bsz], paragraph_tokens[bsz])
+                table_selected_tokens = get_span_tokens_from_table(table_cell_tag_prediction[bsz], table_cell_tokens[bsz])
+                answer = paragraph_selected_span_tokens + table_selected_tokens
+                answer = sorted(answer)
+                output_dict["pred_span"].append(answer)
+                pred_span += answer
+                current_ops[0] = "Spans"
+            elif "COUNT" in self.OPERATOR_CLASSES and predicted_operator_class[bsz] == self.OPERATOR_CLASSES["COUNT"]:
+                paragraph_selected_tokens = \
+                    get_span_tokens_from_paragraph(paragraph_token_tag_prediction[bsz], paragraph_tokens[bsz])
+                table_selected_tokens = \
+                    get_span_tokens_from_table(table_cell_tag_prediction[bsz], table_cell_tokens[bsz])
+                answer = len(paragraph_selected_tokens) + len(table_selected_tokens)
+                output_dict["pred_span"].append(answer)
+                pred_span += sorted(paragraph_selected_tokens + table_selected_tokens)
+                current_ops[0] = "Count"
+            else:
+                if num_numbers == 0:
+                    answer = ""
+                else:
+                    #selected_numbers = [selected_numbers_batch[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
+                    selected_numbers = selected_numbers_batch[bsz]
+
+                    if len(selected_numbers) == 0:
+                        answer = ""
+                    else:
+                        selected_numbers_labels = [pred_ari_tags_class[i] for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
+                        #selected_numbers_ids = [i for i in range(num_numbers) if number_indexes_batch[i,0] == bsz]
+                        temp_ans = []
+                        for roud in range(self.num_ops):
+                            if "STP" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["STP"]:
+                                if roud == 0:
+                                    answer = ""
+                                    print("stop at first round")
+                                    #current_ops = ["ignore"] * self.num_ops
+                                    current_ops[roud] = "Stop"
+                                else:
+                                    answer = temp_ans[-1]
+                                    #current_ops[roud:] = ["Stop"]*(self.num_ops - roud)
+                                    current_ops[roud] = "Stop"
+                                break
+                            roud_selected_numbers = [selected_numbers[i] for i in range(len(selected_numbers)) if selected_numbers_labels[i][roud] != 0]
+                            for rnum in roud_selected_numbers:
+                                if rnum not in pred_operands:
+                                    pred_operands[rnum] = [roud]
+                                else:
+                                    pred_operands[rnum].append(roud)
+                            
+                            if roud > 0 :
+                                opt_selected_indexes = pred_opt_class[bsz,:,roud-1]
+                                opt_selected_numbers = [temp_ans[i] for i in range(roud) if opt_selected_indexes[i] != 0]
+                                roud_selected_numbers += opt_selected_numbers
+                            if len(roud_selected_numbers) == 0 and roud != 0:
+                                print("no numbers at round "+str(roud))
+                                print(pred_ari_class[bsz])
+                                #print(gold_answers[bsz]["gold_ops"])
+                                print(selected_numbers_labels)
+                                print("----------------------------------------")
+                                if len(temp_ans) == 0:
+                                    answer = ""
+                                else:
+                                    answer  =temp_ans[-1]
+                                #current_ops = ["ignore"] * self.num_ops
+                                current_ops[roud] = "Stop"
+                                break
+                            else:
+                                if len(roud_selected_numbers) == 0:
+                                    roud_selected_numbers = selected_numbers
+                                #print(pred_ari_class[bsz])
+                                #print(gold_answers[bsz]["gold_ops"])
+                                #print("----------------------------------------")
+                                if "SUM" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["SUM"]:
+                                    temp_ans.append(np.sum(roud_selected_numbers))
+                                    current_ops[roud] = "Sum"
+                                elif "TIMES" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["TIMES"]:
+                                    temp_ans.append(np.prod(roud_selected_numbers))
+                                    current_ops[roud] = "Multiplication"
+                                elif "AVERAGE" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["AVERAGE"]:
+                                    temp_ans.append(np.mean(roud_selected_numbers))
+                                    current_ops[roud] = "Average"
+                                else:
+                                    operand_one = np.nan
+                                    operand_two = np.nan
+                                    is_opt = False
+                                    if roud > 0 :
+                                        opt_selected_indexes = pred_opt_class[bsz,:,roud-1]
+                                        opd1_opt_selected_numbers = [[pred_opd1_opt_scores[bsz,i,roud-1],temp_ans[i]] for i in range(roud) if opt_selected_indexes[i] == 1]
+                                        opd2_opt_selected_numbers = [[pred_opd2_opt_scores[bsz,i,roud-1],temp_ans[i]] for i in range(roud) if opt_selected_indexes[i] == 2]
+                                        if not opd1_opt_selected_numbers:
+                                            if not opd2_opt_selected_numbers:
+                                                operand_one = first_numbers[bsz,roud]
+                                                operand_two = sec_numbers[bsz,roud]
+                                            else:
+                                                best_opt_score = 0
+                                                for opd2_opt_number in opd2_opt_selected_numbers:
+                                                   if opd2_opt_number[0] > best_opt_score:
+                                                      operand_two = opd2_opt_number[1]
+                                                      best_opt_score = opd2_opt_number[0]
+                                                      is_opt = True
+                                                operand_one = top_numbers[bsz,roud]
+                                        else:
+                                            best_opt_score = 0
+                                            for opd1_opt_number in opd1_opt_selected_numbers:
+                                                if opd1_opt_number[0] > best_opt_score:
+                                                    operand_one = opd1_opt_number[1]
+                                                    best_opt_score = opd1_opt_number[0]
+                                                    is_opt = True
+                                            if not opd2_opt_selected_numbers:
+                                                operand_two = top_numbers[bsz,roud]
+                                            else:
+                                                best_opt_score = 0
+                                                for opd2_opt_number in opd2_opt_selected_numbers:
+                                                   if opd2_opt_number[0] > best_opt_score:
+                                                      operand_two = opd2_opt_number[1]
+                                                      best_opt_score = opd2_opt_number[0]
+                                                      is_opt = True
+                                            
+                                    else:
+                                        operand_one = first_numbers[bsz,roud]
+                                        operand_two = sec_numbers[bsz,roud]
+                                    if np.isnan(operand_one) or np.isnan(operand_two):
+                                        if len(temp_ans) == 0:
+                                            answer = ""
+                                        else:
+                                            answer  =temp_ans[-1]
+                                        #current_ops = ["ignore"] * self.num_ops
+                                        current_ops[roud] = "Stop"
+                                        break
+                                    else:
+                                        if "DIFF" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["DIFF"]:
+                                            if is_opt == True or int(pred_order[bsz,roud]) == 0:
+                                                temp_ans.append(operand_one - operand_two)
+                                            else:
+                                                temp_ans.append(operand_two - operand_one)
+                                            current_ops[roud] = "Difference"
+                                        elif "DIVIDE" in self.ARI_CLASSES and pred_ari_class[bsz,roud] == self.ARI_CLASSES["DIVIDE"]:
+                                            if is_opt == True or int(pred_order[bsz,roud]) == 0:
+                                                if operand_two == 0:
+                                                    answer  =temp_ans[-1]
+                                                    current_ops[roud] = "Stop"
+                                                    break
+                                                temp_ans.append(operand_one / operand_two)
+                                            else:
+                                                if operand_one == 0:
+                                                    answer  =temp_ans[-1]
+                                                    current_ops[roud] = "Stop"
+                                                    break
+                                                temp_ans.append(operand_two / operand_one)
+                                            current_ops[roud] = "Division"
+                                if roud == self.num_ops - 1:
+                                    answer = np.round(temp_ans[-1],4)
+
+                if answer != "":
+                    answer = np.round(temp_ans[-1],4)
+                    if SCALE[int(predicted_scale_class[bsz])] == "percent":
+                        answer = answer * 100
+
+            output_dict["prediction"].append(answer)
+            output_dict["pred_scale"].append(SCALE[int(predicted_scale_class[bsz])])
+            output_dict["ground_truth"].append(gold_answers[bsz]["ground_truth"])
+            
+        return output_dict                                           
 
 def reduce_mean_vector(values, index, name="segmented_reduce_vector_mean"):
     return _segment_reduce_vector(values, index, "mean", name)
