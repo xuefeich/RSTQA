@@ -214,8 +214,10 @@ class LlamaForTAT(LlamaPreTrainedModel):
             logits = torch.cat(logits, dim=-1)
         else:
             logits = self.lm_head(sequence_output)
-        logits = logits.float()
+        # logits = logits.float()
 
+        sequence_output = logits[-1]
+        
         loss = None
 
         batch_size = sequence_output.shape[0]
