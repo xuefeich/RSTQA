@@ -1,6 +1,7 @@
 import os
 import argparse
 import json
+from tag_op.data.preproc import TagTaTQAReader
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_path", type=str, default='./dataset_tagop')
 parser.add_argument("--output_dir", type=str, default="./tag_op/cache")
