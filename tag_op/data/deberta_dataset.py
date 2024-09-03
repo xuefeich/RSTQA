@@ -1296,9 +1296,9 @@ class TagTaTQATestReader(object):
                 paragraph_number_value, paragraph_index, paragraph_mapping_content = \
             paragraph_test_tokenize(question, paragraphs, self.tokenizer, answer_mapping, answer_type)
 
-        if self.mode == "dev":
-            gold_ops,truth_numbers,order_labels = self.summerize_op(derivation, answer_type, facts, answer, answer_mapping, scale,table_cell_number_value,paragraph_number_value)
-            if gold_ops is None:
+        # if self.mode == "dev":
+        gold_ops,truth_numbers,order_labels = self.summerize_op(derivation, answer_type, facts, answer, answer_mapping, scale,table_cell_number_value,paragraph_number_value)
+        if gold_ops is None:
                 gold_ops = ["ignore"] *self.num_ops
         question_ids = question_tokenizer(question_text, self.tokenizer)
 
@@ -1309,12 +1309,12 @@ class TagTaTQATestReader(object):
                     self.sep,self.opt, self.question_length_limit,
                     self.passage_length_limit, self.max_pieces,self.num_ops)
 
-        if self.mode == "test":
-            gold_ops= None
-            scale = None
-            order_labels = None
-        else:
-            self.scale_count[scale] += 1
+        # if self.mode == "test":
+        #     gold_ops= None
+        #     scale = None
+        #     order_labels = None
+        # else:
+        self.scale_count[scale] += 1
         answer_dict = {"answer_type": answer_type, "answer": answer, "scale": scale, "answer_from": answer_from,
                 "gold_ops": gold_ops, "gold_scale":scale,"order_labels":order_labels}
 
