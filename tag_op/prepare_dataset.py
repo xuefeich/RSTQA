@@ -59,7 +59,7 @@ with open("ari_operator_ids.json",'w',encoding = 'utf-8') as fr:
 for dm in data_mode:
     dpath = os.path.join(args.input_path, data_format.format(dm))
 
-    if dm == "dev":
+    if dm in ["dev","test"]:
         #data,round1_data,round2_data,round3_data,round4_data,round5_data,round6_data = data_reader._read(dpath)
         data,mdata = data_reader._read(dpath)
     else:
