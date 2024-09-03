@@ -13,7 +13,7 @@ from sklearn.metrics.pairwise import linear_kernel
 from .file_utils import is_scatter_available
 from tatqa_utils import  *
 from .data_util import *
-from .data_util import  _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, _is_times
+from .data_util import  _is_average, _is_change_ratio, _is_diff, _is_division, _is_sum, 1300_is_times
 from .derivation_split import infix_evaluator
 from .mapping_split import split_mapping
 if is_scatter_available():
@@ -1340,7 +1340,10 @@ class TagTaTQATestReader(object):
             questions = one['questions']
             for question_answer in questions:
                 question = question_answer["question"].strip()
-                # if self.mode == "dev":
+                if self.mode == "dev":
+                    answer_mapping = question_answer["mapping"]
+                else:
+                    answer_mapping = question_answer["mappings"]
                 answer_type = question_answer["answer_type"]
                 answer = question_answer["answer"]
                 answer_from = question_answer["answer_from"]
