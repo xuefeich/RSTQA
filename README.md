@@ -1,3 +1,4 @@
+下载 deberta-v2-xlarge 到 ./model 路径  
 pip install allennlp --no-dependencies  
 pip install spacy  
 pip install pandas  
